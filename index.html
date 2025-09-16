@@ -249,5 +249,223 @@
   });
 })();
 </script>
+
+<!-- ======== YT-style ? overlay + parameter editor ======== -->
+<script>
+(() => {
+  // reuse helpers safely in this IIFE
+  const url = new URL(location.href);
+  const q = (k, d='') => (url.searchParams.get(k) ?? d).trim();
+
+  // --- styles ---
+  const style = document.createElement('style');
+  style.textContent = `
+    .ytpanel-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: none; z-index: 9999;
+    }
+    .ytpanel {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(92vw, 560px);
+      background: #111; color: #fff; border: 1px solid #333; border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    .ytpanel header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 14px; border-bottom: 1px solid #222; background:#141414; border-radius: 10px 10px 0 0;
+    }
+    .ytpanel header h3 { margin:0; font-size: 15px; font-weight: 600; }
+    .ytpanel .content { padding: 12px 14px; }
+    .ytpanel .grid {
+      display:grid; grid-template-columns: 1fr 1fr; gap: 10px 12px;
+    }
+    .ytpanel label { display:flex; flex-direction:column; gap:6px; }
+    .ytpanel .k { font-size: 12px; color:#aaa; }
+    .ytpanel input, .ytpanel select {
+      background:#0b0b0b; color:#fff; border:1px solid #2a2a2a;
+      border-radius:8px; padding:8px 10px; outline:none;
+    }
+    .ytpanel input:focus, .ytpanel select:focus { border-color:#3b82f6; }
+    .ytpanel .actions {
+      display:flex; gap:10px; justify-content:flex-end; padding: 10px 14px 14px;
+      border-top: 1px solid #222;
+    }
+    .ytpanel button {
+      border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; border-radius:8px; padding:8px 12px; cursor:pointer;
+    }
+    .ytpanel button.primary { background:#2563eb; border-color:#2563eb; }
+    .ytpanel small.hint { display:block; color:#9aa; margin-top:8px; }
+    .ytpill {
+      display:inline-block; padding:2px 8px; border-radius:999px; background:#1e293b; color:#cbd5e1; font-size:12px;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // --- DOM ---
+  const backdrop = document.createElement('div');
+  backdrop.className = 'ytpanel-backdrop';
+  backdrop.innerHTML = `
+    <div class="ytpanel" role="dialog" aria-modal="true" aria-label="Kasina timer settings">
+      <header>
+        <h3>Quick Help & Settings <span class="ytpill">Press ? to toggle</span></h3>
+        <button id="ytpanel-close" aria-label="Close">✕</button>
+      </header>
+      <div class="content">
+        <div style="margin-bottom:10px">
+          <div><b>Keyboard:</b> <code>Space</code> starts/stops. <code>?</code> opens/closes this panel. <code>Esc</code> closes.</div>
+          <small class="hint">Times accept <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code> (e.g. <code>90s</code>, <code>2m</code>).</small>
+        </div>
+
+        <div class="grid">
+          <label>
+            <span class="k">Lead-in (lead)</span>
+            <input id="f-lead" placeholder="10s" />
+          </label>
+          <label>
+            <span class="k">Main duration (t)</span>
+            <input id="f-t" placeholder="10m" />
+          </label>
+          <label>
+            <span class="k">End gap (gap)</span>
+            <input id="f-gap" placeholder="2s" />
+          </label>
+          <label>
+            <span class="k">Reverb decay (reverb)</span>
+            <input id="f-reverb" placeholder="2500" />
+          </label>
+          <label>
+            <span class="k">Reverb mix 0–1 (mix)</span>
+            <input id="f-mix" placeholder="0.22" />
+          </label>
+          <label>
+            <span class="k">Kasina color (color)</span>
+            <input id="f-color" placeholder="cobalt / #0047AB" />
+          </label>
+          <label>
+            <span class="k">Background (bg)</span>
+            <input id="f-bg" placeholder="#000000" />
+          </label>
+          <label>
+            <span class="k">Diameter (d)</span>
+            <input id="f-d" placeholder="280px" />
+          </label>
+        </div>
+
+        <small class="hint">Tip: leave any field blank to remove that param and fall back to default.</small>
+      </div>
+      <div class="actions">
+        <button id="ytpanel-permalink">Copy permalink</button>
+        <span style="flex:1"></span>
+        <button id="ytpanel-cancel">Cancel</button>
+        <button id="ytpanel-apply" class="primary">Apply</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  // --- seed current values ---
+  const $ = (sel) => backdrop.querySelector(sel);
+  const fields = {
+    lead: $('#f-lead'),
+    t: $('#f-t'),
+    gap: $('#f-gap'),
+    reverb: $('#f-reverb'),
+    mix: $('#f-mix'),
+    color: $('#f-color'),
+    bg: $('#f-bg'),
+    d: $('#f-d'),
+  };
+  Object.entries(fields).forEach(([k, el]) => { const v = q(k,''); if (v) el.value = v; });
+
+  // --- panel show/hide ---
+  function openPanel() { backdrop.style.display = 'block'; trapFocus(); }
+  function closePanel() { backdrop.style.display = 'none'; releaseFocus(); }
+
+  let lastFocused = null;
+  function trapFocus() {
+    lastFocused = document.activeElement;
+    const focusables = backdrop.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusables.length) focusables[0].focus();
+    backdrop.addEventListener('keydown', focusTrapHandler);
+  }
+  function releaseFocus() {
+    backdrop.removeEventListener('keydown', focusTrapHandler);
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  }
+  function focusTrapHandler(e) {
+    if (e.key !== 'Tab') return;
+    const focusables = [...backdrop.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(n => !n.disabled);
+    if (!focusables.length) return;
+    const first = focusables[0], last = focusables[focusables.length-1];
+    if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+  }
+
+  // --- keyboard toggles ---
+  window.addEventListener('keydown', (e) => {
+    const isQuestion = e.key === '?' || (e.code === 'Slash' && e.shiftKey);
+    if (isQuestion) {
+      e.preventDefault();
+      backdrop.style.display === 'block' ? closePanel() : openPanel();
+      return;
+    }
+    if (e.key === 'Escape' && backdrop.style.display === 'block') {
+      e.preventDefault();
+      closePanel();
+    }
+  });
+
+  // buttons / click-off
+  $('#ytpanel-close').addEventListener('click', closePanel);
+  $('#ytpanel-cancel').addEventListener('click', closePanel);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closePanel(); });
+
+  // --- apply: rewrite URL params & reload ---
+  function setParam(sp, key, value) {
+    const trimmed = (value ?? '').trim();
+    if (!trimmed) sp.delete(key); else sp.set(key, trimmed);
+  }
+
+  $('#ytpanel-apply').addEventListener('click', () => {
+    const sp = new URLSearchParams(location.search);
+    setParam(sp, 'lead', fields.lead.value);
+    setParam(sp, 't', fields.t.value);
+    setParam(sp, 'gap', fields.gap.value);
+    setParam(sp, 'reverb', fields.reverb.value);
+    setParam(sp, 'mix', fields.mix.value);
+    setParam(sp, 'color', fields.color.value);
+    setParam(sp, 'bg', fields.bg.value);
+    setParam(sp, 'd', fields.d.value);
+
+    const next = `${location.pathname}?${sp.toString()}`;
+    location.replace(next); // avoids history spam
+  });
+
+  // --- permalink copy ---
+  $('#ytpanel-permalink').addEventListener('click', async () => {
+    const sp = new URLSearchParams(location.search);
+    const tmp = new URL(location.href);
+    setParam(sp, 'lead', fields.lead.value);
+    setParam(sp, 't', fields.t.value);
+    setParam(sp, 'gap', fields.gap.value);
+    setParam(sp, 'reverb', fields.reverb.value);
+    setParam(sp, 'mix', fields.mix.value);
+    setParam(sp, 'color', fields.color.value);
+    setParam(sp, 'bg', fields.bg.value);
+    setParam(sp, 'd', fields.d.value);
+    tmp.search = sp.toString();
+    try {
+      await navigator.clipboard.writeText(tmp.toString());
+      const btn = $('#ytpanel-permalink');
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => (btn.textContent = old), 900);
+    } catch {
+      prompt('Copy this URL:', tmp.toString());
+    }
+  });
+})();
+</script>
 </body>
 </html>
