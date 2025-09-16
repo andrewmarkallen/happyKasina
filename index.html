@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kasina + FM Gong Timer (Serene Reverb, No UI)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { height: 100%; margin: 0; background:#000; }
+    .wrap { height: 100%; display: grid; place-items: center; background:#000; }
+    .kasina {
+      width: 280px; height: 280px; border-radius: 50%;
+      background: #0047AB; /* cobalt by default */
+      box-shadow: 0 0 40px rgba(255,255,255,0.06);
+      will-change: transform, background, width, height;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kasina" id="kasina"></div>
+  </div>
+
+<script>
+(() => {
+  // =========================
+  // URL params & defaults
+  // =========================
+  const url = new URL(location.href);
+  const q = (k, d='') => (url.searchParams.get(k) ?? d).trim();
+
+  function parseDuration(str, defMs) {
+    if (!str) return defMs;
+    const s = str.toLowerCase();
+    if (/^\d+$/.test(s)) return Number(s) * 1000; // seconds
+    let ms = 0, any = false, m;
+    const re = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
+    while ((m = re.exec(s))) {
+      any = true; const v = parseFloat(m[1]); const u = m[2];
+      ms += (u==='ms')? v : (u==='s')? v*1e3 : (u==='m')? v*6e4 : v*36e5;
+    }
+    return any ? ms : defMs;
+  }
+
+  // Your original defaults (“initial practice”)
+  const leadMs = parseDuration(q('lead'), 10_000);        // 10s
+  const mainMs = parseDuration(q('t'),    10*60_000);     // 10m
+  const gapMs  = parseDuration(q('gap'),  2_000);         // 2s
+
+  // Reverb defaults: serene room
+  const revMs  = parseDuration(q('reverb'), 2_500);       // 2.5s decay (0 disables)
+  const revMix = Math.max(0, Math.min(1, parseFloat(q('mix') || '0.22'))); // gentle ~ -12 dB
+
+  const presets = { cobalt:'#0047AB', amaranth:'#C41E3A', crimson:'#DC143C', azure:'#007FFF', steel:'#4682B4' };
+  const colorParam = q('color','');
+  const kasinaColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorParam)
+    ? colorParam
+    : (presets[colorParam.toLowerCase()] || '#0047AB');   // cobalt default
+  const bgColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(q('bg')) ? q('bg') : '#000000';
+  const diameter = q('d','280px');                        // 280px default
+
+  // Apply visuals
+  const kasinaEl = document.getElementById('kasina');
+  kasinaEl.style.background = kasinaColor;
+  kasinaEl.style.width = diameter;
+  kasinaEl.style.height = diameter;
+  document.body.style.background = bgColor;
+  document.querySelector('.wrap').style.background = bgColor;
+
+  // =========================
+  // WebAudio: FM gong + reverb
+  // =========================
+  let audioCtx = null, reverbNode = null, revWet = null, revDry = null;
+
+  function ensureCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  // Build a simple stereo convolver impulse on the fly (exponential noise tail)
+  function buildReverb(ctx, decayMs) {
+    const rate = ctx.sampleRate;
+    const length = Math.max(1, Math.floor(rate * (decayMs/1000)));
+    const impulse = ctx.createBuffer(2, length, rate);
+    for (let ch=0; ch<2; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i=0; i<length; i++) {
+        // White noise * exp-decay. Small predelay-ish headroom.
+        const t = i / rate;
+        const decay = Math.exp(-3.5 * t / (decayMs/1000)); // 60dB-ish over decayMs
+        data[i] = (Math.random()*2 - 1) * decay * 0.6;
+      }
+      // Add a tap to create a gentle early reflection spread
+      for (let i=0; i<Math.min(200, length-20); i++) {
+        data[i+20] += data[i] * 0.4 * (ch===0 ? 1.0 : 0.8);
+      }
+    }
+    const convolver = ctx.createConvolver();
+    convolver.buffer = impulse;
+    return convolver;
+  }
+
+  function ensureReverb() {
+    const ctx = ensureCtx();
+    if (!reverbNode && revMs > 0) {
+      reverbNode = buildReverb(ctx, revMs);
+      revWet = ctx.createGain();
+      revDry = ctx.createGain();
+      revWet.gain.value = revMix;        // wet mix
+      revDry.gain.value = 1 - revMix;    // dry mix
+      // Fan-in targets will connect to revDry & revWet; then to destination
+      const wetOut = ctx.createGain();
+      reverbNode.connect(wetOut);
+      wetOut.connect(ctx.destination);
+      revWet.connect(reverbNode);
+      revDry.connect(ctx.destination);
+    }
+    return { ctx, reverbNode, revWet, revDry };
+  }
+
+  // Utility: exponential-ish amp envelope
+  function ampEnv(gainNode, t0, peak, atk, dec) {
+    const g = gainNode.gain;
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(1e-5, t0);
+    g.exponentialRampToValueAtTime(Math.max(peak,1e-4), t0 + atk);
+    g.exponentialRampToValueAtTime(1e-5, t0 + atk + dec);
+  }
+  // Utility: index envelope for FM (gain driving frequency AudioParam)
+  function indexEnv(gainNode, t0, indexHz, atk, dec) {
+    const g = gainNode.gain;
+    g.cancelScheduledValues(t0);
+    g.setValueAtTime(1e-3, t0);
+    g.exponentialRampToValueAtTime(Math.max(indexHz, 1e-3), t0 + atk);
+    g.exponentialRampToValueAtTime(1e-3, t0 + atk + dec);
+  }
+
+  // FM gong (multi-operator, decaying indexes), routed through reverb send
+  function playFMGong({when=0, level=0.65, base=220, atk=0.005, dec=6.0, shimmer=true} = {}) {
+    const { ctx } = ensureReverb();
+    const t0 = ctx.currentTime + (when||0);
+
+    // Split to dry/wet
+    const dry = ctx.createGain();
+    const wet = ctx.createGain();
+    dry.gain.value = revDry ? revDry.gain.value : 1.0;
+    wet.gain.value = revWet ? revWet.gain.value : 0.0;
+
+    if (revDry) dry.connect(ctx.destination); else dry.connect(ctx.destination);
+    if (revWet && reverbNode) wet.connect(revWet); // send to reverb input
+
+    // Master before split
+    const master = ctx.createGain();
+    master.gain.value = level;
+    master.connect(dry);
+    if (revWet && reverbNode) master.connect(wet);
+
+    // Carrier
+    const c = ctx.createOscillator();
+    c.type = 'sine';
+    c.frequency.setValueAtTime(base, t0);
+
+    const cAmp = ctx.createGain();
+    cAmp.gain.value = 0.0;
+    c.connect(cAmp);
+    cAmp.connect(master);
+    ampEnv(cAmp, t0, 1.0, atk, dec);
+
+    // Modulator A (ratio ≈ e)
+    const mA = ctx.createOscillator();
+    mA.type = 'sine';
+    mA.frequency.setValueAtTime(base * (2.71 + (Math.random()*0.04-0.02)), t0);
+    const mAG = ctx.createGain(); mAG.gain.value = 0.0;
+    mA.connect(mAG); mAG.connect(c.frequency);
+    indexEnv(mAG, t0, base*2.2, 0.002, dec*0.87);
+
+    // Modulator B (another inharmonic)
+    const mB = ctx.createOscillator();
+    mB.type = 'sine';
+    mB.frequency.setValueAtTime(base * (4.07 + (Math.random()*0.04-0.02)), t0);
+    const mBG = ctx.createGain(); mBG.gain.value = 0.0;
+    mB.connect(mBG); mBG.connect(c.frequency);
+    indexEnv(mBG, t0, base*1.4, 0.003, dec*0.78);
+
+    // Optional shimmer (quick)
+    let mS, mSG;
+    if (shimmer) {
+      mS = ctx.createOscillator();
+      mS.type = 'sine';
+      mS.frequency.setValueAtTime(base * (9.0 + (Math.random()*0.5-0.25)), t0);
+      mSG = ctx.createGain(); mSG.gain.value = 0.0;
+      mS.connect(mSG); mSG.connect(c.frequency);
+      indexEnv(mSG, t0, base*0.5, 0.002, Math.min(1.4, dec*0.25));
+    }
+
+    // Strike accent (very short)
+    mAG.gain.setTargetAtTime(mAG.gain.value + base*0.8, t0, 0.005);
+    mAG.gain.setTargetAtTime(1e-3, t0 + 0.03, 0.02);
+
+    // Start/stop
+    const stopAt = t0 + dec + 0.6;
+    for (const o of [c, mA, mB, mS].filter(Boolean)) { o.start(t0); o.stop(stopAt); }
+  }
+
+  // =========================
+  // Timers / controls
+  // =========================
+  let running = false, leadTimer=null, mainTimer=null;
+
+  function clearAll() {
+    if (leadTimer) clearTimeout(leadTimer);
+    if (mainTimer) clearTimeout(mainTimer);
+    leadTimer = mainTimer = null;
+  }
+
+  function startSequence() {
+    if (running) return;
+    running = true;
+    const { ctx, reverbNode } = ensureReverb();
+    // If reverb was requested but not built yet (revMs == 0 => dry only)
+    if (reverbNode == null && revMs > 0) ensureReverb();
+
+    // Lead-in → start gong
+    leadTimer = setTimeout(() => {
+      leadTimer = null;
+      playFMGong({ level:0.5, base:220, dec:4.5, shimmer:false });
+
+      // Main → two end gongs
+      mainTimer = setTimeout(() => {
+        mainTimer = null;
+        playFMGong({ level:0.65, base:196, dec:6.2, shimmer:true });
+        setTimeout(() => playFMGong({ level:0.65, base:220, dec:6.2, shimmer:true }), gapMs);
+        running = false;
+      }, mainMs);
+    }, leadMs);
+  }
+
+  function cancelSequence() { clearAll(); running = false; }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Space' && !e.repeat) {
+      if (!running) startSequence(); else cancelSequence();
+    }
+  }, { passive:false });
+
+  console.log('[FM Gong Timer]', {
+    leadMs, mainMs, gapMs, reverb: revMs, mix: revMix, color: kasinaColor, bg: bgColor, diameter
+  });
+})();
+</script>
+</body>
+</html>
