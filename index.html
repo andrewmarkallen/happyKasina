@@ -4,29 +4,1006 @@
   <meta charset="utf-8" />
   <title>Kasina + FM Gong Timer (Serene Reverb, No UI)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
   <style>
-    html, body { height: 100%; margin: 0; background:#000; }
-    .wrap { height: 100%; display: grid; place-items: center; background:#000; }
+    html, body { height: 100%; margin: 0; background:#000; overflow: hidden; }
+    .wrap { position: fixed; inset: 0; display: grid; place-items: center; background:#000; overflow: hidden; }
+    .scene-root { position: absolute; inset: 0; background: #000; pointer-events: none; }
+    .scene-root canvas { display: block; width: 100%; height: 100%; }
     .kasina {
       width: 280px; height: 280px; border-radius: 50%;
-      background: #0047AB;
+      background:
+        radial-gradient(circle at 44% 34%, rgba(255,255,255,0.08), rgba(255,255,255,0) 38%),
+        radial-gradient(circle, #1765c8 0%, #0b54b9 64%, #08479f 100%);
       box-shadow: 0 0 40px rgba(255,255,255,0.06);
       will-change: transform, background, width, height;
+      position: relative;
+      z-index: 1;
+    }
+    .kasina[data-kasina="disk"] .candle-scene { display: none; }
+    .kasina[data-kasina="candle"] {
+      display: grid;
+      place-items: center;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .candle-scene {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .candle-plane {
+      position: absolute;
+      left: 50%;
+      bottom: 12%;
+      width: 46%;
+      height: 4%;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(20,14,10,0), rgba(66,43,24,0.58) 24%, rgba(96,60,30,0.62) 50%, rgba(66,43,24,0.58) 76%, rgba(20,14,10,0));
+      filter: blur(0.2px);
+    }
+    .candle-body {
+      position: absolute;
+      left: 50%;
+      bottom: 15%;
+      width: 27%;
+      height: 34%;
+      transform: translateX(-50%);
+      border-radius: 0 0 9% 9% / 0 0 5% 5%;
+      background:
+        radial-gradient(ellipse at 48% 8%, rgba(255,244,214,0.36), rgba(255,244,214,0) 42%),
+        linear-gradient(90deg, #94846b 0%, #e5dbc1 18%, #f2ead4 46%, #c7b89a 82%, #75664f 100%);
+      box-shadow: inset 7px 0 12px rgba(255,255,255,0.12), inset -12px 0 18px rgba(38,26,18,0.28), 0 12px 20px rgba(0,0,0,0.32);
+    }
+    .candle-top {
+      position: absolute;
+      left: 50%;
+      bottom: 46%;
+      width: 27%;
+      height: 7.2%;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background:
+        radial-gradient(ellipse at 50% 54%, rgba(95,70,48,0.24) 0 16%, rgba(242,232,205,0.86) 42%, rgba(149,130,100,0.88) 72%, rgba(87,70,50,0.44) 100%),
+        linear-gradient(90deg, rgba(255,255,255,0.18), rgba(255,255,255,0));
+      box-shadow: inset 0 4px 7px rgba(45,30,18,0.2), 0 1px 2px rgba(255,244,214,0.12);
+    }
+    .candle-wick {
+      position: absolute;
+      left: 50%;
+      bottom: 45%;
+      width: 2.5%;
+      height: 16%;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: linear-gradient(#322015, #120d0a);
+      box-shadow: 0 0 5px rgba(246,146,49,0.08);
+    }
+    .candle-flame {
+      position: absolute;
+      left: 50%;
+      bottom: 56%;
+      width: 26%;
+      height: 34%;
+      transform: translateX(-50%);
+      border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%;
+      background:
+        radial-gradient(ellipse at 50% 68%, rgba(255,199,94,0.62) 0 14%, rgba(246,138,42,0.42) 36%, rgba(196,71,24,0.16) 58%, rgba(196,71,24,0) 72%),
+        radial-gradient(ellipse at 50% 48%, rgba(255,158,54,0.5) 0 24%, rgba(216,78,22,0.22) 56%, rgba(216,78,22,0) 76%);
+      clip-path: polygon(50% 0%, 64% 18%, 75% 42%, 72% 70%, 59% 94%, 50% 100%, 39% 94%, 28% 70%, 25% 42%, 36% 18%);
+      opacity: 0.88;
+      filter: blur(0.15px);
+      transform-origin: 50% 92%;
+    }
+    .candle-flame::after {
+      content: "";
+      position: absolute;
+      inset: 26% 32% 16%;
+      border-radius: 50% 50% 48% 48% / 64% 64% 36% 36%;
+      background: radial-gradient(ellipse at 50% 70%, rgba(255,209,116,0.54), rgba(245,157,61,0.26) 58%, rgba(245,157,61,0) 72%);
+    }
+    .kasina[data-kasina="candle"][data-flicker="true"] .candle-flame {
+      animation: candleFlameFlicker 5.8s ease-in-out infinite;
+    }
+    @keyframes candleFlameFlicker {
+      0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.86; }
+      24% { transform: translateX(calc(-50% + 4px)) scale(0.94, 1.07); opacity: 0.96; }
+      53% { transform: translateX(calc(-50% - 3px)) scale(1.06, 0.95); opacity: 0.78; }
+      78% { transform: translateX(calc(-50% + 2px)) scale(0.97, 1.05); opacity: 0.92; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kasina[data-kasina="candle"][data-flicker="true"] .candle-flame {
+        animation: none;
+      }
+    }
+    .wrap[data-renderer="three"] .kasina { opacity: 0; visibility: hidden; }
+    .wrap[data-renderer="fallback"] .scene-root { display: none; }
+    .practice-hud {
+      --lead-fade-ms: 3000ms;
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      color: #f4efe3;
+      font: 650 14px/1.1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      opacity: 1;
+      transition: opacity var(--lead-fade-ms) linear;
+    }
+    .practice-hud[data-state="lead"],
+    .practice-hud[data-state="hidden"] {
+      opacity: 0;
+    }
+    .practice-hud[data-state="hidden"] {
+      pointer-events: none;
+      transition-duration: 180ms;
+    }
+    .practice-hud button {
+      appearance: none;
+      display: grid;
+      place-items: center;
+      min-height: 40px;
+      border: 1px solid rgba(228, 223, 208, 0.22);
+      border-radius: 8px;
+      background: rgba(18, 21, 20, 0.68);
+      color: inherit;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+      cursor: pointer;
+      font: inherit;
+    }
+    .practice-hud button:focus-visible {
+      outline: 2px solid #8aa1d6;
+      outline-offset: 3px;
+    }
+    .practice-hud-icon {
+      position: absolute;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: inherit;
+      line-height: 1;
+    }
+    .practice-hud-settings {
+      left: 15%;
+      top: 80%;
+      transform: translate(-50%, -50%);
+    }
+    .practice-hud-info {
+      right: 15%;
+      top: 80%;
+      transform: translate(50%, -50%);
+    }
+    .practice-hud-controls {
+      position: absolute;
+      left: max(20px, env(safe-area-inset-left));
+      right: max(20px, env(safe-area-inset-right));
+      bottom: max(22px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: minmax(96px, 1fr) minmax(112px, 1.2fr) minmax(78px, 1fr);
+      gap: 12px;
+      align-items: end;
+      max-width: 620px;
+      margin: 0 auto;
+    }
+    .practice-hud-primary {
+      min-height: 54px;
+      background: rgba(228, 223, 208, 0.94) !important;
+      color: #101110 !important;
+      font-size: 18px !important;
+    }
+    .practice-hud-time {
+      font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 560px) {
+      .practice-hud {
+        font-size: 12px;
+      }
+      .practice-hud-controls {
+        grid-template-columns: minmax(82px, 1fr) minmax(96px, 1.15fr) minmax(66px, 1fr);
+        gap: 8px;
+        left: 14px;
+        right: 14px;
+        bottom: max(14px, env(safe-area-inset-bottom));
+      }
+      .practice-hud button {
+        min-height: 36px;
+      }
+      .practice-hud-primary {
+        min-height: 48px;
+        font-size: 16px !important;
+      }
     }
   </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js"
+      }
+    }
+  </script>
 </head>
 <body>
-  <div class="wrap">
-    <div class="kasina" id="kasina"></div>
+  <div class="wrap" data-renderer="fallback">
+    <div class="scene-root" id="scene-root" aria-hidden="true"></div>
+    <div class="kasina" id="kasina" data-kasina="disk">
+      <div class="candle-scene" aria-hidden="true">
+        <div class="candle-plane"></div>
+        <div class="candle-body"></div>
+        <div class="candle-top"></div>
+        <div class="candle-wick"></div>
+        <div class="candle-flame"></div>
+      </div>
+    </div>
   </div>
+  <div class="practice-hud" id="practice-hud" data-state="idle" aria-label="Practice controls">
+    <button class="practice-hud-icon practice-hud-settings" type="button" aria-label="Open settings">f</button>
+    <button class="practice-hud-icon practice-hud-info" type="button" aria-label="Open meditation instructions">j</button>
+    <div class="practice-hud-controls">
+      <button id="practice-hud-lead" type="button" aria-label="Lead-in duration">lead in 3s</button>
+      <button id="practice-hud-action" class="practice-hud-primary" type="button">Space</button>
+      <button id="practice-hud-duration" class="practice-hud-time" type="button" aria-label="Session duration">10:00</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const readParams = () => Object.fromEntries(new URLSearchParams(location.search));
+  let activeParams = readParams();
+  const q = (k, d='') => ((activeParams[k] ?? d)).trim();
+  let THREE = null;
+  let activeScene = null;
+  const presetColors = {
+    blue:'#1E397A',
+    red:'#B8322A',
+    yellow:'#F2C230',
+    white:'#E4DFD0',
+    cobalt:'#0047AB',
+    amaranth:'#C41E3A',
+    crimson:'#DC143C',
+    azure:'#007FFF',
+    steel:'#4682B4',
+  };
+  const cameraDistance = 7.0;
+  const cameraFovDegrees = 36;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const expandHex = (hex) =>
+    hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`.toUpperCase()
+      : hex.toUpperCase();
+
+  const resolveKasinaColor = (value) => {
+    const color = value.trim();
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)
+      ? expandHex(color)
+      : (presetColors[color.toLowerCase()] || '#0047AB');
+  };
+
+  const resolveKasinaKind = (value) =>
+    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
+
+  const resolveCandleFlicker = (value) =>
+    value.trim() !== '0' && !reducedMotion;
+
+  const resolveBackgroundColor = (value) =>
+    /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? expandHex(value) : '#000000';
+
+  const cssLength = (value, fallback) => {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    if (/^0?\.\d+$/.test(trimmed)) return `${Number(trimmed) * 100}vw`;
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `${trimmed}px`;
+    return trimmed;
+  };
+
+  const resolveRendererMode = (value) => {
+    const mode = value.trim().toLowerCase();
+    return mode === 'css' || mode === 'three' ? mode : 'auto';
+  };
+
+  const probeWebGl = () => {
+    const canvas = document.createElement('canvas');
+    const attributes = { alpha: false, antialias: false, failIfMajorPerformanceCaveat: true };
+    const gl = canvas.getContext('webgl2', attributes) || canvas.getContext('webgl', attributes);
+    const supported = !!gl;
+    if (gl) {
+      const extension = gl.getExtension('WEBGL_lose_context');
+      if (extension) extension.loseContext();
+    }
+    return supported;
+  };
+
+  const applyFallbackVisuals = () => {
+    const wrap = document.querySelector('.wrap');
+    const root = document.getElementById('scene-root');
+    const fallbackDisk = document.getElementById('kasina');
+    if (!(wrap && root && fallbackDisk)) return;
+
+    const kasinaKind = resolveKasinaKind(q('kasina','disk'));
+    const candleFlicker = resolveCandleFlicker(q('flicker','1'));
+    const kasinaColor = resolveKasinaColor(q('color',''));
+    const bgColor = resolveBackgroundColor(q('bg'));
+    const diameter = cssLength(q('d','280px'), '280px');
+    fallbackDisk.dataset.kasina = kasinaKind;
+    fallbackDisk.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
+    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    fallbackDisk.style.width = diameter;
+    fallbackDisk.style.height = diameter;
+    document.body.style.background = bgColor;
+    wrap.style.background = bgColor;
+    root.style.background = bgColor;
+  };
+
+  const hexToRgb = (hex) => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  });
+
+  const clampByte = (value) => Math.max(0, Math.min(255, Math.round(value)));
+  const liftChannel = (value, amount) => value + ((255 - value) * amount);
+  const brightenRgb = (rgb, amount) => ({
+    r: liftChannel(rgb.r, amount),
+    g: liftChannel(rgb.g, amount),
+    b: liftChannel(rgb.b, amount),
+  });
+
+  const seedFromString = (text) =>
+    [...text].reduce((seed, char) => ((seed << 5) - seed + char.charCodeAt(0)) >>> 0, 0x6d2b79f5);
+
+  const randomFromSeed = (seed) => {
+    let state = seed >>> 0;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+
+  const diskRadiusFromPixels = (diameterPx, viewportHeight) => {
+    const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(cameraFovDegrees / 2)) * cameraDistance;
+    return (diameterPx / viewportHeight) * visibleHeight / 2;
+  };
+
+  const makeTexture = (canvas, colorSpace) => {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = colorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.anisotropy = 4;
+    return texture;
+  };
+
+  function createPaperColorTexture(hexColor) {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const base = brightenRgb(hexToRgb(hexColor), 0.18);
+    const rand = randomFromSeed(seedFromString(`paper:${hexColor}`));
+    canvas.width = size;
+    canvas.height = size;
+
+    const image = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        const dx = x / size - 0.5;
+        const dy = y / size - 0.5;
+        const radius = Math.sqrt(dx * dx + dy * dy);
+        const fine = (rand() - 0.5) * 8.0;
+        const tooth = (rand() - 0.5) * 3.0;
+        const fleck = rand() > 0.994 ? (rand() > 0.45 ? 12 : -14) : 0;
+        const edge = Math.max(0, radius - 0.42) * 7.0;
+        const variation = fine + tooth + fleck - edge;
+        image.data[i] = clampByte(base.r + variation);
+        image.data[i + 1] = clampByte(base.g + variation);
+        image.data[i + 2] = clampByte(base.b + variation);
+        image.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+
+    for (let i = 0; i < 900; i++) {
+      const alpha = 0.018 + rand() * 0.026;
+      const tone = rand() > 0.52 ? 255 : 0;
+      const radius = 0.22 + rand() * 0.9;
+      ctx.fillStyle = `rgba(${tone},${tone},${tone},${alpha})`;
+      ctx.beginPath();
+      ctx.arc(rand() * size, rand() * size, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    return makeTexture(canvas, THREE.SRGBColorSpace);
+  }
+
+  function createPaperBumpTexture(hexColor) {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const rand = randomFromSeed(seedFromString(`bump:${hexColor}`));
+    canvas.width = size;
+    canvas.height = size;
+
+    const image = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        const grain = (rand() - 0.5) * 22;
+        const pore = rand() > 0.985 ? (rand() - 0.5) * 34 : 0;
+        const value = clampByte(128 + grain + pore);
+        image.data[i] = value;
+        image.data[i + 1] = value;
+        image.data[i + 2] = value;
+        image.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+
+    return makeTexture(canvas, THREE.NoColorSpace);
+  }
+
+  function createDisk(hexColor) {
+    const faceTexture = createPaperColorTexture(hexColor);
+    const bumpTexture = createPaperBumpTexture(hexColor);
+    const baseColor = new THREE.Color(hexColor);
+    const sideColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.08).multiplyScalar(0.68);
+    const backColor = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.06).multiplyScalar(0.52);
+
+    const faceMaterial = new THREE.MeshStandardMaterial({
+      map: faceTexture,
+      bumpMap: bumpTexture,
+      bumpScale: 0.010,
+      roughness: 0.92,
+      metalness: 0,
+    });
+    const sideMaterial = new THREE.MeshStandardMaterial({
+      color: sideColor,
+      bumpMap: bumpTexture,
+      bumpScale: 0.005,
+      roughness: 0.98,
+      metalness: 0,
+    });
+    const backMaterial = new THREE.MeshStandardMaterial({
+      color: backColor,
+      roughness: 1,
+      metalness: 0,
+    });
+
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 1, 160, 1, false),
+      [sideMaterial, faceMaterial, backMaterial]
+    );
+    mesh.rotation.x = Math.PI / 2;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const group = new THREE.Group();
+    group.add(mesh);
+    return group;
+  }
+
+  function createCandleFlameMaterial() {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      blending: THREE.NormalBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uMotion: { value: reducedMotion ? 0 : 1 },
+        uFlicker: { value: 0 },
+        uBrightness: { value: 1 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uMotion;
+        uniform float uFlicker;
+        uniform float uBrightness;
+        varying vec2 vUv;
+
+        float flameBody(float width, float edge, vec2 uv) {
+          float y = uv.y;
+          float taper = mix(width, width * 0.24, smoothstep(0.10, 0.96, y));
+          float side = 1.0 - smoothstep(taper, taper + edge, abs(uv.x - 0.5));
+          float bottom = smoothstep(0.02, 0.16, y);
+          float top = 1.0 - smoothstep(0.82, 1.0, y + abs(uv.x - 0.5) * 0.52);
+          return side * bottom * top;
+        }
+
+        void main() {
+          float y = vUv.y;
+          float slowDrift = (sin(uTime * 0.38 + y * 2.7) * 0.016 + uFlicker * 0.05) * uMotion;
+          float heightBreath = 1.0 + uFlicker * 0.065 * uMotion;
+          vec2 uv = vec2(vUv.x - slowDrift, y * heightBreath);
+          float outer = flameBody(0.255, 0.065, uv);
+          float middle = flameBody(0.175, 0.045, vec2(uv.x, uv.y * 0.98 + 0.035));
+          float core = flameBody(0.095, 0.035, vec2(uv.x, uv.y * 0.94 + 0.10));
+          float verticalFalloff = 1.0 - smoothstep(0.72, 1.0, y);
+          float alpha = clamp((outer * 0.52 + middle * 0.28 + core * 0.22) * verticalFalloff * (0.96 + uFlicker * 0.12), 0.0, 0.74);
+          vec3 ember = vec3(0.66, 0.19, 0.055);
+          vec3 amber = vec3(0.95, 0.43, 0.11);
+          vec3 warm = vec3(1.0, 0.67, 0.30);
+          vec3 color = mix(ember, amber, clamp(middle + y * 0.16, 0.0, 1.0));
+          color = mix(color, warm, clamp(core * 0.62, 0.0, 1.0));
+          gl_FragColor = vec4(color * uBrightness, alpha);
+        }
+      `,
+    });
+  }
+
+  function createCandleBody() {
+    const group = new THREE.Group();
+    const waxMaterial = new THREE.MeshStandardMaterial({
+      color: 0xeadfc6,
+      roughness: 0.86,
+      metalness: 0,
+      emissive: 0x1f1207,
+      emissiveIntensity: 0.035,
+    });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.34, 0.92, 96, 1, false), waxMaterial);
+    body.position.set(0, -0.61, 0);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+
+    const sideShade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.314, 0.344, 0.9, 96, 1, true, Math.PI * 0.08, Math.PI * 0.34),
+      new THREE.MeshBasicMaterial({
+        color: 0x6f5d48,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    sideShade.position.copy(body.position);
+    group.add(sideShade);
+    return group;
+  }
+
+  function createCandleTop() {
+    const group = new THREE.Group();
+    const topMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf1e6cd,
+      roughness: 0.92,
+      metalness: 0,
+      emissive: 0x3c1907,
+      emissiveIntensity: 0.08,
+    });
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.29, 0.052, 96, 1, false), topMaterial);
+    top.position.set(0, -0.13, 0);
+    top.castShadow = true;
+    top.receiveShadow = true;
+    group.add(top);
+
+    const meltWell = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.115, 0.14, 0.012, 64, 1, false),
+      new THREE.MeshStandardMaterial({
+        color: 0xcab999,
+        roughness: 0.98,
+        metalness: 0,
+        emissive: 0x261006,
+        emissiveIntensity: 0.05,
+      })
+    );
+    meltWell.position.set(0, -0.097, 0);
+    group.add(meltWell);
+
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.307, 0.014, 12, 96),
+      new THREE.MeshStandardMaterial({
+        color: 0xd5c7a9,
+        roughness: 0.9,
+        metalness: 0,
+      })
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(0, -0.1, 0);
+    group.add(rim);
+
+    const topFace = new THREE.Mesh(
+      new THREE.CircleGeometry(0.31, 96),
+      new THREE.MeshStandardMaterial({
+        color: 0xe8ddc4,
+        roughness: 0.94,
+        metalness: 0,
+        emissive: 0x3a1706,
+        emissiveIntensity: 0.055,
+        transparent: true,
+        opacity: 0.92,
+        side: THREE.DoubleSide,
+      })
+    );
+    topFace.scale.y = 0.24;
+    topFace.position.set(0, -0.106, 0.318);
+    group.add(topFace);
+    return group;
+  }
+
+  const candleFlickerValue = (elapsed, enabled) => {
+    if (!enabled) return 0;
+    const value =
+      Math.sin(elapsed * 1.31) * 0.46 +
+      Math.sin(elapsed * 2.17 + 1.4) * 0.32 +
+      Math.sin(elapsed * 0.63 + 0.7) * 0.22;
+    return Math.max(-1, Math.min(1, value));
+  };
+
+  function createCandleKasina({ flicker = true } = {}) {
+    const group = new THREE.Group();
+    const baseMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5a361e,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+    });
+    const basePlane = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 0.11), baseMaterial);
+    basePlane.position.set(0, -1.08, -0.02);
+    group.add(basePlane);
+
+    const candleBody = createCandleBody();
+    group.add(candleBody);
+
+    const candleTop = createCandleTop();
+    group.add(candleTop);
+
+    const wickMaterial = new THREE.MeshBasicMaterial({ color: 0x21140d });
+    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.023, 0.34, 20), wickMaterial);
+    wick.rotation.z = -0.08;
+    wick.position.set(0.012, 0.06, 0.018);
+    group.add(wick);
+
+    const flameMaterial = createCandleFlameMaterial();
+    const flame = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.94, 1, 1), flameMaterial);
+    flame.position.set(0, 0.48, 0.04);
+    group.add(flame);
+
+    const flameLight = new THREE.PointLight(0xff8f32, 1.1, 2.4, 1.8);
+    flameLight.position.set(0, 0.43, 0.32);
+    group.add(flameLight);
+
+    group.userData.animatedMaterials = [flameMaterial];
+    group.userData.animatedLights = [flameLight];
+    group.userData.flicker = flicker;
+    return group;
+  }
+
+  const createKasinaObject = (kind, hexColor, { flicker = true } = {}) =>
+    kind === 'candle' ? createCandleKasina({ flicker }) : createDisk(hexColor);
+
+  function createHazeMaterial(opacity) {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      blending: THREE.NormalBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uOpacity: { value: opacity },
+        uTint: { value: new THREE.Color(0xaeb3b8) },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uOpacity;
+        uniform vec3 uTint;
+        varying vec2 vUv;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+
+          return mix(
+            mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+            u.y
+          );
+        }
+
+        float fbm(vec2 p) {
+          float value = 0.0;
+          float amplitude = 0.5;
+          for (int i = 0; i < 4; i++) {
+            value += amplitude * noise(p);
+            p *= 2.02;
+            amplitude *= 0.5;
+          }
+          return value;
+        }
+
+        void main() {
+          vec2 centered = vUv - 0.5;
+          vec2 drift = vec2(uTime * 0.0022, -uTime * 0.0016);
+          float field = fbm(vUv * 2.05 + drift);
+          float veil = smoothstep(0.42, 0.88, field);
+          float diskQuiet = smoothstep(0.18, 0.42, length(centered));
+          float fieldFalloff = 1.0 - smoothstep(0.58, 0.86, length(centered));
+          float lowerAir = smoothstep(-0.56, 0.22, centered.y);
+          float alpha = veil * diskQuiet * fieldFalloff * lowerAir * uOpacity;
+          gl_FragColor = vec4(uTint, alpha);
+        }
+      `,
+    });
+  }
+
+  function initKasinaScene() {
+    const wrap = document.querySelector('.wrap');
+    const root = document.getElementById('scene-root');
+    const fallbackDisk = document.getElementById('kasina');
+    if (!(wrap && root && fallbackDisk)) throw new Error('Kasina visual mount is missing.');
+
+    let kasinaKind = resolveKasinaKind(q('kasina','disk'));
+    let candleFlicker = resolveCandleFlicker(q('flicker','1'));
+    let kasinaColor = resolveKasinaColor(q('color',''));
+    let bgColor = resolveBackgroundColor(q('bg'));
+    let diameter = cssLength(q('d','280px'), '280px');
+    fallbackDisk.dataset.kasina = kasinaKind;
+    fallbackDisk.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
+    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    fallbackDisk.style.width = diameter;
+    fallbackDisk.style.height = diameter;
+    document.body.style.background = bgColor;
+    wrap.style.background = bgColor;
+    root.style.background = bgColor;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setClearColor(bgColor, 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(bgColor);
+    scene.fog = new THREE.FogExp2(bgColor, 0.035);
+
+    const camera = new THREE.PerspectiveCamera(cameraFovDegrees, window.innerWidth / window.innerHeight, 0.1, 40);
+    camera.position.set(0, 0, cameraDistance);
+    camera.lookAt(0, 0, 0);
+
+    let visualObject = createKasinaObject(kasinaKind, kasinaColor, { flicker: candleFlicker });
+    scene.add(visualObject);
+
+    const roomMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(bgColor).lerp(new THREE.Color(0x050504), 0.92),
+      roughness: 1,
+      metalness: 0,
+    });
+    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), roomMaterial);
+    backWall.position.set(0, 0, -1.8);
+    backWall.receiveShadow = true;
+    scene.add(backWall);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), roomMaterial.clone());
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, -1.65, 1.4);
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    scene.add(new THREE.AmbientLight(0x151515, 0.86));
+
+    const keyLight = new THREE.SpotLight(0xfff7df, 22, 12, 0.54, 0.94, 1.4);
+    keyLight.position.set(-1.55, 2.15, 4.75);
+    keyLight.target.position.set(0, -0.03, -0.55);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    keyLight.shadow.camera.near = 2;
+    keyLight.shadow.camera.far = 9;
+    keyLight.shadow.radius = 6;
+    scene.add(keyLight, keyLight.target);
+
+    const fillLight = new THREE.DirectionalLight(0x718bb4, 0.32);
+    fillLight.position.set(3.5, 1.2, 5);
+    scene.add(fillLight);
+
+    const hazeMaterials = [createHazeMaterial(0.014), createHazeMaterial(0.009)];
+    const hazeNear = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 6.8), hazeMaterials[0]);
+    hazeNear.position.set(0, 0, -0.34);
+    scene.add(hazeNear);
+
+    const hazeFar = new THREE.Mesh(new THREE.PlaneGeometry(14, 8.2), hazeMaterials[1]);
+    hazeFar.position.set(0.12, -0.05, -1.08);
+    scene.add(hazeFar);
+
+    const resize = () => {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      const rect = fallbackDisk.getBoundingClientRect();
+      const diameterPx = Math.max(80, Math.min(Math.max(window.innerWidth, window.innerHeight), rect.width || 280));
+      const radius = diskRadiusFromPixels(diameterPx, window.innerHeight);
+      if (kasinaKind === 'candle') {
+        visualObject.scale.set(radius, radius, radius);
+      } else {
+        visualObject.scale.set(radius, radius, Math.max(0.036, radius * 0.074));
+      }
+    };
+
+    const disposeObject = (object) => {
+      object.traverse((node) => {
+        if (!node.isMesh) return;
+        node.geometry.dispose();
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          ['map', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap'].forEach((key) => {
+            if (material[key]) material[key].dispose();
+          });
+          material.dispose();
+        });
+      });
+    };
+
+    const disposeScene = () => {
+      renderer.setAnimationLoop(null);
+      window.removeEventListener('resize', resize);
+      disposeObject(scene);
+      renderer.dispose();
+      renderer.forceContextLoss();
+      renderer.domElement.remove();
+      wrap.dataset.renderer = 'fallback';
+      activeScene = null;
+    };
+
+    const applyVisualSettings = (params) => {
+      activeParams = { ...params };
+      const nextKasinaKind = resolveKasinaKind(q('kasina','disk'));
+      const nextCandleFlicker = resolveCandleFlicker(q('flicker','1'));
+      const nextKasinaColor = resolveKasinaColor(q('color',''));
+      const nextBgColor = resolveBackgroundColor(q('bg'));
+      const nextDiameter = cssLength(q('d','280px'), '280px');
+
+      fallbackDisk.dataset.kasina = nextKasinaKind;
+      fallbackDisk.dataset.flicker = String(nextKasinaKind === 'candle' && nextCandleFlicker);
+      fallbackDisk.style.background = nextKasinaKind === 'disk' ? nextKasinaColor : 'transparent';
+      fallbackDisk.style.width = nextDiameter;
+      fallbackDisk.style.height = nextDiameter;
+      document.body.style.background = nextBgColor;
+      wrap.style.background = nextBgColor;
+      root.style.background = nextBgColor;
+      renderer.setClearColor(nextBgColor, 1);
+      scene.background = new THREE.Color(nextBgColor);
+      scene.fog.color = new THREE.Color(nextBgColor);
+      roomMaterial.color.copy(new THREE.Color(nextBgColor).lerp(new THREE.Color(0x050504), 0.92));
+      floor.material.color.copy(roomMaterial.color);
+
+      if (
+        nextKasinaKind !== kasinaKind ||
+        (nextKasinaKind === 'disk' && nextKasinaColor !== kasinaColor) ||
+        (nextKasinaKind === 'candle' && nextCandleFlicker !== candleFlicker)
+      ) {
+        scene.remove(visualObject);
+        disposeObject(visualObject);
+        visualObject = createKasinaObject(nextKasinaKind, nextKasinaColor, { flicker: nextCandleFlicker });
+        scene.add(visualObject);
+      }
+
+      kasinaKind = nextKasinaKind;
+      candleFlicker = nextCandleFlicker;
+      kasinaColor = nextKasinaColor;
+      bgColor = nextBgColor;
+      diameter = nextDiameter;
+      resize();
+      render();
+    };
+
+    const startedAt = performance.now();
+    const render = (now = performance.now()) => {
+      const elapsed = reducedMotion ? 0 : (now - startedAt) / 1000;
+      hazeMaterials.forEach((material, index) => {
+        material.uniforms.uTime.value = elapsed * (0.7 + index * 0.23);
+      });
+      (visualObject.userData.animatedMaterials || []).forEach((material) => {
+        const flicker = candleFlickerValue(elapsed, visualObject.userData.flicker);
+        material.uniforms.uTime.value = elapsed;
+        material.uniforms.uFlicker.value = flicker;
+        material.uniforms.uBrightness.value = 1.0 + flicker * 0.12;
+      });
+      (visualObject.userData.animatedLights || []).forEach((light) => {
+        const flicker = candleFlickerValue(elapsed, visualObject.userData.flicker);
+        light.intensity = 1.05 + flicker * 0.22;
+        light.position.x = flicker * 0.045;
+      });
+      renderer.render(scene, camera);
+    };
+
+    root.appendChild(renderer.domElement);
+    resize();
+    render();
+    wrap.dataset.renderer = 'three';
+    window.addEventListener('resize', resize);
+    renderer.setAnimationLoop(render);
+
+    return { applyVisualSettings, disposeScene };
+  }
+
+  const fallBackToCss = (error) => {
+    if (error) console.warn('[Kasina Three.js] Falling back to the CSS visual.', error);
+    const wrap = document.querySelector('.wrap');
+    if (wrap) wrap.dataset.renderer = 'fallback';
+    applyFallbackVisuals();
+  };
+
+  async function tryInitThreeScene() {
+    const rendererMode = resolveRendererMode(q('renderer','auto'));
+    if (rendererMode === 'css') {
+      fallBackToCss();
+      return;
+    }
+    if (rendererMode === 'auto' && !probeWebGl()) {
+      fallBackToCss();
+      return;
+    }
+
+    try {
+      if (!THREE) THREE = await import('three');
+      activeScene = initKasinaScene();
+    } catch (error) {
+      activeScene = null;
+      fallBackToCss(error);
+    }
+  }
+
+  applyFallbackVisuals();
+  tryInitThreeScene();
+
+  window.addEventListener('happykasina:settingschange', (event) => {
+    activeParams = { ...event.detail.params };
+    applyFallbackVisuals();
+    const rendererMode = resolveRendererMode(q('renderer','auto'));
+    if (rendererMode === 'css' && activeScene) {
+      activeScene.disposeScene();
+      return;
+    }
+    if (activeScene) {
+      activeScene.applyVisualSettings(event.detail.params);
+      return;
+    }
+    tryInitThreeScene();
+  });
+})();
+</script>
 
 <script>
 (() => {
   // =========================
   // URL params & defaults
   // =========================
-  const url = new URL(location.href);
-  const q = (k, d='') => (url.searchParams.get(k) ?? d).trim();
+  const readParams = () => Object.fromEntries(new URLSearchParams(location.search));
+  let activeParams = readParams();
+  const q = (k, d='') => ((activeParams[k] ?? d)).trim();
 
   function parseDuration(str, defMs) {
     if (!str) return defMs;
@@ -41,38 +1018,127 @@
     return any ? ms : defMs;
   }
 
+  function parseTimerDuration(str, defMs) {
+    if (!str) return defMs;
+    const s = str.toLowerCase();
+    if (/^\d+$/.test(s)) {
+      if (s.length <= 2) return Number(s) * 1000;
+      const minutes = Number(s.slice(0, -2));
+      const seconds = Number(s.slice(-2));
+      return ((minutes * 60) + seconds) * 1000;
+    }
+    return parseDuration(s, defMs);
+  }
+
+  function parseAudioDuration(str, defMs) {
+    if (!str) return defMs;
+    const s = str.toLowerCase();
+    if (/^\d+$/.test(s)) return Number(s);
+    return parseDuration(s, defMs);
+  }
+
+  const maxAudioReverbMs = 12000;
+  const clampAudioReverbMs = (ms) => Math.max(0, Math.min(maxAudioReverbMs, ms));
+
   // Practice timers
-  const leadMs = parseDuration(q('lead'), 10_000);
-  const mainMs = parseDuration(q('t'),    10*60_000);
-  const gapMs  = parseDuration(q('gap'),  2_000);
+  let leadMs = parseTimerDuration(q('lead'), 3_000);
+  let mainMs = parseTimerDuration(q('t'),    10*60_000);
+  const parseReflectionPeriod = (str, defMs) =>
+    str.trim().toLowerCase() === 'off' ? 0 : parseTimerDuration(str, defMs);
+
+  let gapMs  = q('reflection','1') === '0' ? 0 : parseReflectionPeriod(q('gap'), 15_000);
+  let reflectionEnabled = gapMs > 0;
+  const defaultSoundVolume = 0.45;
+  const parseSoundVolume = (value) => Math.max(0, Math.min(1, parseFloat(value || String(defaultSoundVolume))));
+  let soundVolume = parseSoundVolume(q('vol'));
+
+  const clampNumber = (min, max, value) => Math.max(min, Math.min(max, value));
+  const parseClampedNumber = (value, fallback, min, max) => {
+    const parsed = parseFloat(value || '');
+    return clampNumber(min, max, Number.isFinite(parsed) ? parsed : fallback);
+  };
+  const defaultReflectionBellSettings = Object.freeze({
+    pitch: 880,
+    metal: 1,
+    harmony: 0,
+  });
+  const resolveReflectionBellSettings = () => ({
+    pitch: parseClampedNumber(q('bellPitch'), defaultReflectionBellSettings.pitch, 440, 1320),
+    metal: parseClampedNumber(q('bellMetal'), defaultReflectionBellSettings.metal, 0, 1),
+    harmony: parseClampedNumber(q('bellHarmony'), defaultReflectionBellSettings.harmony, 0, 1),
+  });
+  const reflectionBellRatio = (harmony) => 2.78 + ((3.0 - 2.78) * harmony);
+  const reflectionBellModulationIndex = (metal) => 0.3 + (metal * 1.5);
+  let reflectionBellSettings = resolveReflectionBellSettings();
 
   // Reverb defaults (overridden by preset or URL)
-  let revMs  = parseDuration(q('reverb'), 2_500);
+  let revMs  = clampAudioReverbMs(parseAudioDuration(q('reverb'), 500));
   let revMix = Math.max(0, Math.min(1, parseFloat(q('mix') || '0.22')));
   // Chorus flag can be forced by URL
   let chorusForced = q('chorus','').toLowerCase();
   if (chorusForced !== '0' && chorusForced !== '1') chorusForced = '';
 
   // Visuals
-  const presetsColors = { cobalt:'#0047AB', amaranth:'#C41E3A', crimson:'#DC143C', azure:'#007FFF', steel:'#4682B4' };
-  const colorParam = q('color','');
-  const kasinaColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorParam)
-    ? colorParam
-    : (presetsColors[colorParam.toLowerCase()] || '#0047AB');
-  const bgColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(q('bg')) ? q('bg') : '#000000';
-  const diameter = q('d','280px');
-
+  const presetsColors = {
+    blue:'#1E397A',
+    red:'#B8322A',
+    yellow:'#F2C230',
+    white:'#E4DFD0',
+    cobalt:'#0047AB',
+    amaranth:'#C41E3A',
+    crimson:'#DC143C',
+    azure:'#007FFF',
+    steel:'#4682B4',
+  };
   const kasinaEl = document.getElementById('kasina');
-  kasinaEl.style.background = kasinaColor;
-  kasinaEl.style.width = diameter;
-  kasinaEl.style.height = diameter;
-  document.body.style.background = bgColor;
-  document.querySelector('.wrap').style.background = bgColor;
+  let kasinaColor = '#0047AB';
+  let kasinaKind = 'disk';
+  let bgColor = '#000000';
+  let diameter = '280px';
+
+  const expandHex = (hex) =>
+    hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`.toUpperCase()
+      : hex.toUpperCase();
+
+  const cssLength = (value, fallback) => {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    if (/^0?\.\d+$/.test(trimmed)) return `${Number(trimmed) * 100}vw`;
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `${trimmed}px`;
+    return trimmed;
+  };
+
+  const resolveKasinaKind = (value) =>
+    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
+
+  const resolveCandleFlicker = (value) =>
+    value.trim() !== '0' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function applyFallbackVisuals() {
+    const colorParam = q('color','');
+    kasinaKind = resolveKasinaKind(q('kasina','disk'));
+    const candleFlicker = resolveCandleFlicker(q('flicker','1'));
+    kasinaColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(colorParam)
+      ? expandHex(colorParam)
+      : (presetsColors[colorParam.toLowerCase()] || '#0047AB');
+    bgColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(q('bg')) ? expandHex(q('bg')) : '#000000';
+    diameter = cssLength(q('d','280px'), '280px');
+    kasinaEl.dataset.kasina = kasinaKind;
+    kasinaEl.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
+    kasinaEl.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    kasinaEl.style.width = diameter;
+    kasinaEl.style.height = diameter;
+    document.body.style.background = bgColor;
+    document.querySelector('.wrap').style.background = bgColor;
+  }
+
+  applyFallbackVisuals();
 
   // =========================
   // WebAudio core
   // =========================
-  let audioCtx = null, convolver = null, revWet = null, revDry = null, wetChainIn = null, wetChainOut = null;
+  let audioCtx = null, convolver = null, revWet = null, revDry = null, wetChainIn = null, wetChainOut = null, audioOutput = null;
 
   function ensureCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -80,21 +1146,38 @@
     return audioCtx;
   }
 
+  function ensureAudioOutput(ctx) {
+    if (audioOutput) return audioOutput;
+    const bus = ctx.createGain();
+    const safety = ctx.createDynamicsCompressor();
+    safety.threshold.value = -18;
+    safety.knee.value = 18;
+    safety.ratio.value = 8;
+    safety.attack.value = 0.008;
+    safety.release.value = 0.32;
+    bus.gain.value = 0.86;
+    bus.connect(safety);
+    safety.connect(ctx.destination);
+    audioOutput = bus;
+    return audioOutput;
+  }
+
   // Build a simple stereo convolver impulse (exponential noise tail)
   function buildReverb(ctx, decayMs) {
     const rate = ctx.sampleRate;
-    const length = Math.max(1, Math.floor(rate * (decayMs/1000)));
+    const decaySeconds = Math.max(0.001, decayMs / 1000);
+    const length = Math.max(1, Math.floor(rate * decaySeconds));
     const impulse = ctx.createBuffer(2, length, rate);
     for (let ch=0; ch<2; ch++) {
       const data = impulse.getChannelData(ch);
       for (let i=0; i<length; i++) {
         const t = i / rate;
-        const decay = Math.exp(-3.5 * t / (decayMs/1000)); // ~60dB over decayMs
-        data[i] = (Math.random()*2 - 1) * decay * 0.6;
+        const decay = Math.exp(-3.5 * t / decaySeconds); // ~60dB over decayMs
+        data[i] = (Math.random()*2 - 1) * decay * 0.28;
       }
       // gentle early reflection
       for (let i=0; i<Math.min(200, length-20); i++) {
-        data[i+20] += data[i] * 0.4 * (ch===0 ? 1.0 : 0.8);
+        data[i+20] += data[i] * 0.22 * (ch===0 ? 1.0 : 0.8);
       }
     }
     const conv = ctx.createConvolver();
@@ -102,8 +1185,13 @@
     return conv;
   }
 
+  const defaultChorusCfg = { rateL:0.16, rateR:0.23, depthMs:10, delayMs:18, mix:0.5 };
+
+  const resolveChorusCfg = (cfg = {}) => ({ ...defaultChorusCfg, ...cfg });
+
   // Build a simple stereo chorus block (post-reverb)
-  function buildChorus(ctx, { rateL=0.15, rateR=0.20, depthMs=8, delayMs=12, mix=0.35 } = {}) {
+  function buildChorus(ctx, cfg = {}) {
+    const { rateL, rateR, depthMs, delayMs, mix } = resolveChorusCfg(cfg);
     const input = ctx.createGain();
     const dry = ctx.createGain();
     const wet  = ctx.createGain();
@@ -149,6 +1237,7 @@
 
   function ensureReverb({ enableChorus=false, chorusCfg={} } = {}) {
     const ctx = ensureCtx();
+    const output = ensureAudioOutput(ctx);
     if (!convolver) {
       convolver = buildReverb(ctx, revMs);
       revWet = ctx.createGain();
@@ -158,9 +1247,9 @@
 
       // Build wet chain: revWet -> convolver -> [optional chorus] -> wetOut -> destination
       const wetOut = ctx.createGain();
-      wetOut.connect(ctx.destination);
+      wetOut.connect(output);
+      wetChainOut = wetOut;
 
-      let chain = convolver;
       if (enableChorus) {
         const ch = buildChorus(ctx, chorusCfg);
         convolver.connect(ch.input);
@@ -172,9 +1261,52 @@
 
       // Connect inputs
       revWet.connect(convolver);
-      revDry.connect(ctx.destination);
+      revDry.connect(output);
     }
     return { ctx, convolver, revWet, revDry };
+  }
+
+  const previewFadeSeconds = 0.2;
+  let activePreviewVoices = [];
+
+  function fadeGainParam(gain, now, fadeSeconds) {
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(Math.max(gain.value, 1e-5), now);
+    gain.linearRampToValueAtTime(1e-5, now + fadeSeconds);
+  }
+
+  function registerPreviewVoice(ctx, master, sources, stopAt) {
+    const voice = { master, sources };
+    activePreviewVoices = activePreviewVoices.filter((candidate) => candidate.master.context.state !== 'closed');
+    activePreviewVoices.push(voice);
+    setTimeout(() => {
+      activePreviewVoices = activePreviewVoices.filter((candidate) => candidate !== voice);
+    }, Math.max(0, (stopAt - ctx.currentTime + 0.5) * 1000));
+  }
+
+  function fadeOutPreviewVoices(fadeSeconds = previewFadeSeconds) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const stopAt = now + fadeSeconds + 0.03;
+    const previousWetOut = wetChainOut;
+    activePreviewVoices.forEach(({ master, sources }) => {
+      fadeGainParam(master.gain, now, fadeSeconds);
+      sources.forEach((source) => {
+        try { source.stop(stopAt); } catch (error) {}
+      });
+    });
+    if (previousWetOut) {
+      fadeGainParam(previousWetOut.gain, now, fadeSeconds);
+      setTimeout(() => {
+        try { previousWetOut.disconnect(); } catch (error) {}
+      }, Math.max(0, (fadeSeconds + 0.05) * 1000));
+      convolver = null;
+      revWet = null;
+      revDry = null;
+      wetChainIn = null;
+      wetChainOut = null;
+    }
+    activePreviewVoices = [];
   }
 
   // Envelopes
@@ -193,35 +1325,67 @@
     g.exponentialRampToValueAtTime(1e-3, t0 + atk + dec);
   }
 
-  // Broadband noise "wash" with slow random AM (mallet roll)
-  function addNoiseWash(ctx, master, {
-    level=0.25, attack=0.12, decay=12.0, center=1200, q=0.7, hp=180,
-    amDepth=0.5, amFreqMin=0.08, amFreqMax=0.25, amJitterEvery=3.0
+  function fillPinkNoise(data) {
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i=0; i<data.length; i++) {
+      const white = Math.random()*2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
+      b6 = white * 0.115926;
+    }
+  }
+
+  // Low, filtered bronze bloom; supports the gong body without becoming a hiss bed.
+  function addBronzeBloom(ctx, master, {
+    level=0.035, attack=1.2, decay=14.0, hp=55, lp=1800,
+    amDepth=0.18, amFreqMin=0.035, amFreqMax=0.11, amJitterEvery=4.0,
+    bands=[
+      { freq:180, q:1.0, gain:0.9 },
+      { freq:430, q:1.1, gain:0.55 },
+      { freq:920, q:0.9, gain:0.28 },
+    ],
   } = {}, when=0) {
     const t0 = ctx.currentTime + (when||0);
 
-    // noise buffer
     const noise = ctx.createBufferSource();
     const dur = attack + decay + 2;
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+    const buf = ctx.createBuffer(2, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    fillPinkNoise(buf.getChannelData(0));
+    fillPinkNoise(buf.getChannelData(1));
     noise.buffer = buf; noise.loop = false;
 
-    // filters
-    const g = ctx.createGain(); g.gain.value = 0.0;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = center; bp.Q.value = q;
-    const hip = ctx.createBiquadFilter(); hip.type = 'highpass'; hip.frequency.value = hp;
+    const resonantSum = ctx.createGain();
+    bands.forEach(({ freq, q, gain }) => {
+      const band = ctx.createBiquadFilter();
+      const bandGain = ctx.createGain();
+      band.type = 'bandpass';
+      band.frequency.value = freq;
+      band.Q.value = q;
+      bandGain.gain.value = gain;
+      noise.connect(band);
+      band.connect(bandGain);
+      bandGain.connect(resonantSum);
+    });
 
-    // AM: constant + LFO → sum into gain.gain
-    const base = ctx.createConstantSource(); base.offset.value = Math.max(0.001, 1 - amDepth);
+    const hip = ctx.createBiquadFilter(); hip.type = 'highpass'; hip.frequency.value = hp;
+    const lop = ctx.createBiquadFilter(); lop.type = 'lowpass'; lop.frequency.value = lp; lop.Q.value = 0.6;
+    const envelope = ctx.createGain(); envelope.gain.value = 0.0;
+    const am = ctx.createGain(); am.gain.value = 0.0;
+
+    const base = ctx.createConstantSource(); base.offset.value = Math.max(0.001, 1 - (amDepth / 2));
     const lfo  = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = amFreqMin;
-    const depth = ctx.createGain(); depth.gain.value = amDepth;
+    const depth = ctx.createGain(); depth.gain.value = amDepth / 2;
 
     lfo.connect(depth);
-    depth.connect(g.gain);
-    base.connect(g.gain);
-    base.start();
+    depth.connect(am.gain);
+    base.connect(am.gain);
+    base.start(t0);
+    base.stop(t0 + dur + 0.5);
 
     // Randomize LFO rate over time (slewed)
     function scheduleLfoWander(startT, total) {
@@ -235,27 +1399,32 @@
     }
     scheduleLfoWander(t0, dur);
     lfo.start(t0);
+    lfo.stop(t0 + dur + 0.5);
 
-    // route
-    noise.connect(hip); hip.connect(bp); bp.connect(g); g.connect(master);
+    resonantSum.connect(hip);
+    hip.connect(lop);
+    lop.connect(envelope);
+    envelope.connect(am);
+    am.connect(master);
 
-    // envelope
-    g.gain.setValueAtTime(1e-5, t0);
-    g.gain.exponentialRampToValueAtTime(Math.max(level,1e-4), t0 + attack);
-    g.gain.exponentialRampToValueAtTime(1e-5, t0 + attack + decay);
+    envelope.gain.setValueAtTime(1e-5, t0);
+    envelope.gain.exponentialRampToValueAtTime(Math.max(level,1e-4), t0 + attack);
+    envelope.gain.exponentialRampToValueAtTime(1e-5, t0 + attack + decay);
 
     noise.start(t0);
     noise.stop(t0 + dur + 0.5);
+    return [noise, lfo, base];
   }
 
   // FM gong
   function playFMGong({
-    when=0, level=0.65, base=220, atk=0.005, dec=6.0, shimmer=true,
-    ratioA=2.71, ratioB=4.07, ratioS=9.0, indexA=2.2, indexB=1.4, indexS=0.5,
+    when=0, level=0.42, base=220, atk=0.04, dec=6.0, shimmer=true,
+    ratioA=2.71, ratioB=4.07, ratioS=9.0, indexA=1.2, indexB=0.72, indexS=0.16,
     aDecay=0.87, bDecay=0.78, sDecay=0.25,
-    detuneCents=0, wash=null
+    detuneCents=0, wash=null, preview=false
   } = {}) {
     const { ctx } = ensureReverb(currentWetChain);
+    const output = ensureAudioOutput(ctx);
     const t0 = ctx.currentTime + (when||0);
 
     // Split to dry/wet
@@ -264,12 +1433,12 @@
     dry.gain.value = revDry ? revDry.gain.value : 1.0;
     wet.gain.value = revWet ? revWet.gain.value : 0.0;
 
-    if (revDry) dry.connect(ctx.destination); else dry.connect(ctx.destination);
+    dry.connect(output);
     if (revWet && convolver) wet.connect(revWet);
 
     // Master
     const master = ctx.createGain();
-    master.gain.value = level;
+    master.gain.value = level * soundVolume;
     master.connect(dry);
     if (revWet && convolver) master.connect(wet);
 
@@ -281,9 +1450,14 @@
     c.detune.setValueAtTime(detune, t0);
 
     const cAmp = ctx.createGain();
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.setValueAtTime(3600, t0);
+    tone.Q.value = 0.55;
     cAmp.gain.value = 0.0;
     c.connect(cAmp);
-    cAmp.connect(master);
+    cAmp.connect(tone);
+    tone.connect(master);
     ampEnv(cAmp, t0, 1.0, atk, dec);
 
     // Modulator A
@@ -292,7 +1466,7 @@
     mA.frequency.setValueAtTime(base * (ratioA + (Math.random()*0.04-0.02)), t0);
     const mAG = ctx.createGain(); mAG.gain.value = 0.0;
     mA.connect(mAG); mAG.connect(c.frequency);
-    indexEnv(mAG, t0, base*indexA, 0.002, dec*aDecay);
+    indexEnv(mAG, t0, base*indexA, Math.max(0.012, atk * 0.45), dec*aDecay);
 
     // Modulator B
     const mB = ctx.createOscillator();
@@ -300,7 +1474,7 @@
     mB.frequency.setValueAtTime(base * (ratioB + (Math.random()*0.04-0.02)), t0);
     const mBG = ctx.createGain(); mBG.gain.value = 0.0;
     mB.connect(mBG); mBG.connect(c.frequency);
-    indexEnv(mBG, t0, base*indexB, 0.003, dec*bDecay);
+    indexEnv(mBG, t0, base*indexB, Math.max(0.016, atk * 0.55), dec*bDecay);
 
     // Shimmer
     let mS, mSG;
@@ -310,18 +1484,64 @@
       mS.frequency.setValueAtTime(base * (ratioS + (Math.random()*0.5-0.25)), t0);
       mSG = ctx.createGain(); mSG.gain.value = 0.0;
       mS.connect(mSG); mSG.connect(c.frequency);
-      indexEnv(mSG, t0, base*indexS, 0.002, Math.min(1.4, dec*sDecay));
+      indexEnv(mSG, t0, base*indexS, Math.max(0.02, atk * 0.6), Math.min(1.4, dec*sDecay));
     }
 
-    // Strike accent
-    mAG.gain.setTargetAtTime(mAG.gain.value + base*0.8, t0, 0.005);
-    mAG.gain.setTargetAtTime(1e-3, t0 + 0.03, 0.02);
-
-    // Optional wash
-    if (wash) addNoiseWash(ctx, master, wash, when);
+    const bloomSources = wash ? addBronzeBloom(ctx, master, wash, when) : [];
 
     const stopAt = t0 + dec + 0.8;
-    for (const o of [c, mA, mB, mS].filter(Boolean)) { o.start(t0); o.stop(stopAt); }
+    const toneSources = [c, mA, mB, mS].filter(Boolean);
+    for (const o of toneSources) { o.start(t0); o.stop(stopAt); }
+    if (preview) registerPreviewVoice(ctx, master, [...toneSources, ...bloomSources], stopAt);
+  }
+
+  function playFMBell({
+    when=0, level=0.45, pitch=reflectionBellSettings.pitch,
+    metal=reflectionBellSettings.metal, harmony=reflectionBellSettings.harmony,
+    atk=0.002, dec=1.1, preview=false
+  } = {}) {
+    const { ctx } = ensureReverb(currentWetChain);
+    const output = ensureAudioOutput(ctx);
+    const t0 = ctx.currentTime + (when || 0);
+    const dry = ctx.createGain();
+    const wet = ctx.createGain();
+    dry.gain.value = revDry ? revDry.gain.value : 1.0;
+    wet.gain.value = revWet ? revWet.gain.value : 0.0;
+    dry.connect(output);
+    if (revWet && convolver) wet.connect(revWet);
+
+    const master = ctx.createGain();
+    master.gain.value = level * soundVolume;
+    master.connect(dry);
+    if (revWet && convolver) master.connect(wet);
+
+    const carrier = ctx.createOscillator();
+    carrier.type = 'sine';
+    carrier.frequency.setValueAtTime(pitch, t0);
+
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(1e-5, t0);
+    amp.gain.exponentialRampToValueAtTime(1, t0 + atk);
+    amp.gain.exponentialRampToValueAtTime(1e-4, t0 + atk + dec);
+
+    const mod = ctx.createOscillator();
+    mod.type = 'sine';
+    mod.frequency.setValueAtTime(pitch * reflectionBellRatio(harmony), t0);
+    const modGain = ctx.createGain();
+    modGain.gain.setValueAtTime(pitch * reflectionBellModulationIndex(metal), t0);
+    modGain.gain.exponentialRampToValueAtTime(1e-4, t0 + dec * 0.72);
+
+    mod.connect(modGain);
+    modGain.connect(carrier.frequency);
+    carrier.connect(amp);
+    amp.connect(master);
+
+    const stopAt = t0 + dec + 0.25;
+    carrier.start(t0);
+    mod.start(t0);
+    carrier.stop(stopAt);
+    mod.stop(stopAt);
+    if (preview) registerPreviewVoice(ctx, master, [carrier, mod], stopAt);
   }
 
   // =========================
@@ -330,68 +1550,129 @@
   const PRESETS = {
     'default': {
       label: 'default',
-      fm: { base:220, dec:6.0, shimmer:true, ratioA:2.71, ratioB:4.07, ratioS:9.0, indexA:2.2, indexB:1.4, indexS:0.5, detuneCents:2 },
-      verb: { revMs: 3000, revMix: 0.26 },
+      fm: { base:196, atk:0.045, dec:7.0, shimmer:true, ratioA:2.48, ratioB:3.72, ratioS:8.4, indexA:1.15, indexB:0.62, indexS:0.14, detuneCents:1.2 },
+      verb: { revMs: 3000, revMix: 0.2 },
       chorus: { enabled: false }
     },
     'harder-bronze': {
       label: 'harder-bronze',
-      fm: { base:220, dec:8.5, shimmer:false, ratioA:2.32, ratioB:3.95, indexA:3.0, indexB:1.8, sDecay:0.18, detuneCents:3 },
-      verb: { revMs: 3200, revMix: 0.22 },
+      fm: { base:174, atk:0.05, dec:8.5, shimmer:false, ratioA:2.28, ratioB:3.58, indexA:1.18, indexB:0.64, sDecay:0.18, detuneCents:1.2 },
+      verb: { revMs: 3200, revMix: 0.18 },
       chorus: { enabled: false }
     },
     'temple-bowl': {
       label: 'temple-bowl',
-      fm: { base:110, dec:12.0, shimmer:false, ratioA:2.45, ratioB:3.6, indexA:1.6, indexB:1.1, detuneCents:1 },
-      verb: { revMs: 5500, revMix: 0.38 },
-      chorus: { enabled: true, cfg: { rateL:0.08, rateR:0.11, depthMs:7, delayMs:16, mix:0.22 } }
+      fm: { base:110, level:0.38, atk:0.06, dec:12.0, shimmer:false, ratioA:2.42, ratioB:3.54, indexA:0.88, indexB:0.42, detuneCents:0.8 },
+      verb: { revMs: 5200, revMix: 0.3 },
+      chorus: { enabled: true, cfg: { rateL:0.06, rateR:0.09, depthMs:5, delayMs:15, mix:0.16 } }
     },
-    'wash': { // Pink Floyd sound-bath
+    'wash': {
       label: 'wash',
-      fm: { base:98, dec:18.0, shimmer:true, ratioA:2.6, ratioB:4.3, ratioS:10.5, indexA:3.4, indexB:2.1, indexS:0.8, aDecay:0.95, bDecay:0.92, detuneCents:6,
-            wash: { level:0.5, attack:0.5, decay:18.0, center:1400, q:0.9, hp:160, amDepth:0.55, amFreqMin:0.06, amFreqMax:0.22, amJitterEvery:3.5 } },
-      verb: { revMs: 9000, revMix: 0.52 },
-      chorus: { enabled: true, cfg: { rateL:0.12, rateR:0.17, depthMs:9, delayMs:14, mix:0.35 } }
+      fm: {
+        base:87, level:0.4, atk:0.08, dec:16.0, shimmer:true,
+        ratioA:2.34, ratioB:3.82, ratioS:8.6, indexA:1.05, indexB:0.58, indexS:0.12,
+        aDecay:0.92, bDecay:0.86, detuneCents:1.5,
+        wash: {
+          level:0.035, attack:1.4, decay:16.0, hp:55, lp:1700,
+          amDepth:0.16, amFreqMin:0.035, amFreqMax:0.09, amJitterEvery:4.5,
+          bands:[
+            { freq:130, q:0.9, gain:0.95 },
+            { freq:270, q:1.0, gain:0.72 },
+            { freq:610, q:1.1, gain:0.42 },
+            { freq:1180, q:0.85, gain:0.2 },
+          ],
+        },
+      },
+      verb: { revMs: 7500, revMix: 0.34 },
+      chorus: { enabled: true, cfg: { rateL:0.055, rateR:0.08, depthMs:4, delayMs:18, mix:0.14 } }
     }
   };
 
   let currentWetChain = { enableChorus:false, chorusCfg:{} };
 
+  const normalizePresetName = (name) =>
+    name === 'default' ? 'harder-bronze' : name;
+
   function applyPresetDefaults(name) {
-    const p = PRESETS[name] || PRESETS['default'];
+    const p = PRESETS[normalizePresetName(name)] || PRESETS['harder-bronze'];
 
     // Reverb: preset defaults, then URL overrides
-    revMs  = parseDuration(q('reverb'), p.verb.revMs);
+    revMs  = clampAudioReverbMs(parseAudioDuration(q('reverb'), p.verb.revMs));
     revMix = Math.max(0, Math.min(1, parseFloat(q('mix') || String(p.verb.revMix))));
 
     // Chorus: from preset, optionally forced by URL
     let enableChorus = !!p.chorus.enabled;
     if (chorusForced === '0') enableChorus = false;
     if (chorusForced === '1') enableChorus = true;
-    currentWetChain = { enableChorus, chorusCfg: p.chorus.cfg || {} };
+    currentWetChain = { enableChorus, chorusCfg: resolveChorusCfg(p.chorus.cfg) };
 
     // Rebuild graph: tear down convolver so ensureReverb recreates chain with new settings
     if (audioCtx) {
-      convolver = null; revWet = null; revDry = null; wetChainIn = null;
+      convolver = null; revWet = null; revDry = null; wetChainIn = null; wetChainOut = null;
     }
-    ensureReverb(currentWetChain);
     return p;
   }
 
   // Pick preset from URL
-  const presetName = q('preset','default');
+  let presetName = normalizePresetName(q('preset','harder-bronze'));
   let currentPreset = applyPresetDefaults(presetName);
 
+  function logRuntimeSettings() {
+    console.log('[FM Gong Timer]', {
+      leadMs, mainMs, gapMs, reflectionEnabled, volume: soundVolume, reverb: revMs, mix: revMix, color: kasinaColor, bg: bgColor, diameter, preset: presetName,
+      chorus: currentWetChain.enableChorus
+    });
+  }
+
+  function applyRuntimeSettings(params) {
+    activeParams = { ...params };
+    leadMs = parseTimerDuration(q('lead'), 3_000);
+    mainMs = parseTimerDuration(q('t'), 10*60_000);
+    gapMs = q('reflection','1') === '0' ? 0 : parseReflectionPeriod(q('gap'), 15_000);
+    reflectionEnabled = gapMs > 0;
+    soundVolume = parseSoundVolume(q('vol'));
+    reflectionBellSettings = resolveReflectionBellSettings();
+    chorusForced = q('chorus','').toLowerCase();
+    if (chorusForced !== '0' && chorusForced !== '1') chorusForced = '';
+    applyFallbackVisuals();
+    presetName = normalizePresetName(q('preset','harder-bronze'));
+    currentPreset = applyPresetDefaults(presetName);
+    logRuntimeSettings();
+  }
+
+  window.addEventListener('happykasina:settingschange', (event) => applyRuntimeSettings(event.detail.params));
+  window.addEventListener('happykasina:previewgong', (event) => {
+    fadeOutPreviewVoices();
+    applyRuntimeSettings({ ...activeParams, ...event.detail.params });
+    triggerPresetGong({}, { preview:true });
+  });
+  window.addEventListener('happykasina:previewbell', (event) => {
+    fadeOutPreviewVoices();
+    applyRuntimeSettings({ ...activeParams, ...event.detail.params });
+    playFMBell({ preview:true });
+  });
+
   // Helper: trigger the gong with current preset
-  function triggerPresetGong(extra = {}) {
-    const fm = { ...currentPreset.fm, ...extra };
+  function triggerPresetGong(extra = {}, options = {}) {
+    const fm = { ...currentPreset.fm, ...extra, preview: !!options.preview };
     playFMGong(fm);
+  }
+
+  function previewPresetGong(extra = {}) {
+    fadeOutPreviewVoices();
+    triggerPresetGong(extra, { preview:true });
   }
 
   // =========================
   // Timers / controls
   // =========================
   let running = false, leadTimer=null, mainTimer=null;
+
+  const publishTimerState = (state) => {
+    window.dispatchEvent(new CustomEvent('happykasina:timerstate', {
+      detail: { state, leadMs, mainMs }
+    }));
+  };
 
   function clearAll() {
     if (leadTimer) clearTimeout(leadTimer);
@@ -403,30 +1684,46 @@
     if (running) return;
     running = true;
     ensureReverb(currentWetChain);
+    publishTimerState('lead');
 
     // Lead-in → intro hit
     leadTimer = setTimeout(() => {
       leadTimer = null;
+      publishTimerState('running');
       const introExtra = (presetName === 'wash')
-        ? { level:0.55, dec: currentPreset.fm.dec * 0.6, shimmer:false }
-        : { level:0.5,  dec: Math.max(4.0, currentPreset.fm.dec * 0.55), shimmer:false };
+        ? { level:0.32, dec: currentPreset.fm.dec * 0.55, shimmer:false }
+        : { level:0.34,  dec: Math.max(4.0, currentPreset.fm.dec * 0.55), shimmer:false };
       triggerPresetGong(introExtra);
 
       // After main → two end gongs
       mainTimer = setTimeout(() => {
         mainTimer = null;
-        triggerPresetGong({ base: Math.max(40, (currentPreset.fm.base * 0.89)|0), level:0.7 });
-        setTimeout(() => triggerPresetGong({ base: currentPreset.fm.base, level:0.7 }), gapMs);
+        triggerPresetGong({ base: Math.max(40, (currentPreset.fm.base * 0.89)|0), level:0.42 });
+        if (reflectionEnabled) setTimeout(() => playFMBell(), gapMs);
         running = false;
+        publishTimerState('idle');
       }, mainMs);
     }, leadMs);
   }
 
-  function cancelSequence() { clearAll(); running = false; }
+  function cancelSequence() {
+    clearAll();
+    running = false;
+    publishTimerState('idle');
+  }
+
+  function isEditableTarget(target) {
+    return target instanceof HTMLElement && (
+      target.isContentEditable ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA'
+    );
+  }
 
   // Keyboard
   window.addEventListener('keydown', (e) => {
-    // Space: start/stop timer sequence
+    if (isEditableTarget(e.target)) return;
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Space' && !e.repeat) {
       if (!running) startSequence(); else cancelSequence();
@@ -434,47 +1731,306 @@
     }
     // Live audition
     if (!e.repeat) {
-      if (e.key === 'g' || e.key === 'G') { triggerPresetGong(); }
-      if (e.code === 'Digit1') { currentPreset = applyPresetDefaults('harder-bronze'); triggerPresetGong(); }
-      if (e.code === 'Digit2') { currentPreset = applyPresetDefaults('temple-bowl');  triggerPresetGong(); }
-      if (e.code === 'Digit3') { currentPreset = applyPresetDefaults('wash');          triggerPresetGong(); }
+      if (e.key === 'g' || e.key === 'G') { previewPresetGong(); }
+      if (e.code === 'Digit1') { currentPreset = applyPresetDefaults('harder-bronze'); previewPresetGong(); }
+      if (e.code === 'Digit2') { currentPreset = applyPresetDefaults('temple-bowl');  previewPresetGong(); }
+      if (e.code === 'Digit3') { currentPreset = applyPresetDefaults('wash');          previewPresetGong(); }
     }
   }, { passive:false });
 
-  console.log('[FM Gong Timer]', {
-    leadMs, mainMs, gapMs, reverb: revMs, mix: revMix, color: kasinaColor, bg: bgColor, diameter, preset: presetName,
-    chorus: currentWetChain.enableChorus
+  window.addEventListener('happykasina:togglepractice', () => {
+    if (!running) startSequence(); else cancelSequence();
   });
+
+  logRuntimeSettings();
+  publishTimerState('idle');
 })();
 </script>
 
-<!-- ======== YT-style ? overlay + parameter editor (unchanged UI, adds chorus toggle via URL) ======== -->
+<script>
+(() => {
+  const hud = document.getElementById('practice-hud');
+  const leadButton = document.getElementById('practice-hud-lead');
+  const actionButton = document.getElementById('practice-hud-action');
+  const durationButton = document.getElementById('practice-hud-duration');
+  const settingsButton = hud.querySelector('.practice-hud-settings');
+  const infoButton = hud.querySelector('.practice-hud-info');
+  let countdownTimer = null;
+
+  const readParams = () => Object.fromEntries(new URLSearchParams(location.search));
+  const q = (params, k, d='') => ((params[k] ?? d)).trim();
+
+  const parseDuration = (str, defMs) => {
+    if (!str) return defMs;
+    const s = str.toLowerCase();
+    if (/^\d+$/.test(s)) return Number(s) * 1000;
+    let ms = 0, any = false, m;
+    const re = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
+    while ((m = re.exec(s))) {
+      any = true;
+      const v = parseFloat(m[1]);
+      const u = m[2];
+      ms += (u === 'ms') ? v : (u === 's') ? v * 1000 : (u === 'm') ? v * 60000 : v * 3600000;
+    }
+    return any ? ms : defMs;
+  };
+
+  const parseTimerDuration = (str, defMs) => {
+    if (!str) return defMs;
+    const s = str.toLowerCase();
+    if (/^\d+$/.test(s)) {
+      if (s.length <= 2) return Number(s) * 1000;
+      return ((Number(s.slice(0, -2)) * 60) + Number(s.slice(-2))) * 1000;
+    }
+    return parseDuration(s, defMs);
+  };
+
+  const formatClock = (ms) => {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
+
+  const formatLead = (ms) => `lead in ${Math.max(0, Math.ceil(ms / 1000))}s`;
+
+  const clearCountdown = () => {
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = null;
+  };
+
+  const setHudPhase = (phase, fadeMs = 180) => {
+    hud.style.setProperty('--lead-fade-ms', `${Math.max(0, fadeMs)}ms`);
+    hud.dataset.state = phase;
+  };
+
+  const renderIdle = (params = readParams()) => {
+    clearCountdown();
+    leadButton.textContent = formatLead(parseTimerDuration(q(params, 'lead'), 3_000));
+    actionButton.textContent = 'Space';
+    durationButton.textContent = formatClock(parseTimerDuration(q(params, 't'), 10 * 60_000));
+    setHudPhase('idle');
+  };
+
+  const renderLead = ({ leadMs, mainMs }) => {
+    clearCountdown();
+    const startedAt = performance.now();
+    const renderCountdown = () => {
+      const elapsed = performance.now() - startedAt;
+      leadButton.textContent = formatLead(leadMs - elapsed);
+    };
+    leadButton.textContent = formatLead(leadMs);
+    actionButton.textContent = 'Stop';
+    durationButton.textContent = formatClock(mainMs);
+    setHudPhase('lead', leadMs);
+    renderCountdown();
+    countdownTimer = setInterval(renderCountdown, 200);
+  };
+
+  const renderRunning = ({ mainMs }) => {
+    clearCountdown();
+    leadButton.textContent = 'lead in 0s';
+    actionButton.textContent = 'Stop';
+    durationButton.textContent = formatClock(mainMs);
+    setHudPhase('hidden');
+  };
+
+  const handleTimerState = (event) => {
+    const detail = event.detail;
+    if (detail.state === 'lead') renderLead(detail);
+    if (detail.state === 'running') renderRunning(detail);
+    if (detail.state === 'idle') renderIdle();
+  };
+
+  settingsButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
+  infoButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:openinstructions')));
+  actionButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:togglepractice')));
+  leadButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
+  durationButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
+  window.addEventListener('happykasina:timerstate', handleTimerState);
+  window.addEventListener('happykasina:settingschange', (event) => renderIdle(event.detail.params));
+
+  renderIdle();
+})();
+</script>
+
+<!-- ======== Quiet ? settings overlay ======== -->
 <script>
 (() => {
   const url = new URL(location.href);
   const q = (k, d='') => (url.searchParams.get(k) ?? d).trim();
+  const kasinaChoices = [
+    { name: 'Blue', kind: 'disk', value: '#1E397A', color: '#1E397A' },
+    { name: 'Red', kind: 'disk', value: '#B8322A', color: '#B8322A' },
+    { name: 'Yellow', kind: 'disk', value: '#F2C230', color: '#F2C230' },
+    { name: 'White', kind: 'disk', value: '#E4DFD0', color: '#E4DFD0' },
+    { name: 'Candle', kind: 'candle', value: 'candle', color: '#E78A32' },
+  ];
+  const diskColorAliases = {
+    blue: '#1E397A',
+    red: '#B8322A',
+    yellow: '#F2C230',
+    white: '#E4DFD0',
+    cobalt: '#0047AB',
+    amaranth: '#C41E3A',
+    crimson: '#DC143C',
+    azure: '#007FFF',
+    steel: '#4682B4',
+  };
+  const presets = [
+    { label: 'Bronze', value: 'harder-bronze', chorus: false },
+    { label: 'Bowl', value: 'temple-bowl', chorus: true },
+    { label: 'Gong', value: 'wash', chorus: true },
+  ];
+  const mainDurationTicks = [1, 2, 5, 10, 15, 20, 30, 45, 60];
+  const leadTicks = [0, 15, 30, 45, 60];
+  const reflectionTicks = ['Off', 15, 30, 45, 60];
+  const normalizePresetValue = (value) => value === 'default' ? 'harder-bronze' : value;
+  const clamp = (min, max, value) => Math.max(min, Math.min(max, value));
+  const parsePanelTimerMs = (value, fallbackMs) => {
+    const s = value.trim().toLowerCase();
+    if (!s) return fallbackMs;
+    if (s === 'off') return 0;
+    if (/^\d+$/.test(s)) {
+      if (s.length <= 2) return Number(s) * 1000;
+      return ((Number(s.slice(0, -2)) * 60) + Number(s.slice(-2))) * 1000;
+    }
+    let ms = 0, any = false, m;
+    const re = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
+    while ((m = re.exec(s))) {
+      any = true;
+      const v = parseFloat(m[1]);
+      const u = m[2];
+      ms += (u === 'ms') ? v : (u === 's') ? v * 1000 : (u === 'm') ? v * 60000 : v * 3600000;
+    }
+    return any ? ms : fallbackMs;
+  };
+  const formatClock = (ms) => {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
+  const nearestIndex = (values, target) =>
+    values.reduce((best, value, index) =>
+      Math.abs(value - target) < Math.abs(values[best] - target) ? index : best, 0);
+  const presetDefaults = (value) => {
+    if (value === 'temple-bowl') return { reverb: '5200', mix: '0.30' };
+    if (value === 'wash') return { reverb: '7500', mix: '0.34' };
+    return { reverb: '3200', mix: '0.18' };
+  };
+  const bellDefaults = Object.freeze({
+    pitch: '880',
+    metal: '1',
+    harmony: '0',
+  });
+  const parseDiameterRatio = (value) => {
+    const trimmed = value.trim();
+    if (/^0?\.\d+$/.test(trimmed)) return clamp(0.2, 0.6, Number(trimmed));
+    const pixel = /^(\d+(?:\.\d+)?)px$/.exec(trimmed);
+    if (pixel) return clamp(0.2, 0.6, Number(pixel[1]) / Math.max(window.innerWidth, 1));
+    return 0.3;
+  };
+  const parseReverbKnobValue = (value, fallback) => {
+    const parsed = Number(String(value).replace(/ms$/i, ''));
+    return String(clamp(0, 12000, Number.isFinite(parsed) ? parsed : fallback));
+  };
+  const parseMixKnobValue = (value, fallback) => {
+    const parsed = Number(value);
+    return String(clamp(0, 1, Number.isFinite(parsed) ? parsed : fallback));
+  };
+  const parseClampedKnobValue = (value, fallback, min, max) => {
+    const parsed = Number(value);
+    return String(clamp(min, max, Number.isFinite(parsed) ? parsed : fallback));
+  };
+  const expandHex = (hex) =>
+    hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`.toUpperCase()
+      : hex.toUpperCase();
+  const normalizeDiskColor = (value) => {
+    const trimmed = value.trim();
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed)) return expandHex(trimmed);
+    return diskColorAliases[trimmed.toLowerCase()] || '#1E397A';
+  };
+  const resolveKasinaKind = (value) =>
+    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
 
   // --- styles ---
   const style = document.createElement('style');
   style.textContent = `
-    .ytpanel-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 9999; }
+    .ytpanel-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.62); display: none; z-index: 9999; }
     .ytpanel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: min(92vw, 560px); background: #111; color: #fff; border: 1px solid #333; border-radius: 10px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5); font: 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    .ytpanel header { display:flex; align-items:center; justify-content:space-between;
-      padding: 10px 14px; border-bottom: 1px solid #222; background:#141414; border-radius: 10px 10px 0 0; }
-    .ytpanel header h3 { margin:0; font-size: 15px; font-weight: 600; }
-    .ytpanel .content { padding: 12px 14px; }
-    .ytpanel .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+      width: min(94vw, 820px); max-height: min(92vh, 760px); overflow: auto; background: #0f1110; color: #f4efe3; border: 1px solid rgba(228,223,208,0.18); border-radius: 8px;
+      box-shadow: 0 18px 70px rgba(0,0,0,0.58); font: 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    .ytpanel header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+      padding: 8px 16px; border-bottom: 1px solid rgba(228,223,208,0.12); background:#141615; border-radius: 8px 8px 0 0; }
+    .ytpanel header h3 { margin:0; font-size: 15px; font-weight: 650; letter-spacing: 0; }
+    .ytpanel .panel-intro { margin:3px 0 0; color:#bcb4a3; font-size:12px; max-width: 560px; }
+    .ytpanel .content { padding: 12px 16px; }
+    .ytpanel .settings-grid { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .ytpanel .settings-stack { display:grid; gap: 12px; align-content:start; }
+    .ytpanel section { display:grid; gap: 7px; }
+    .ytpanel h4 { margin:0; font-size: 12px; color:#bcb4a3; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
     .ytpanel label { display:flex; flex-direction:column; gap:6px; }
-    .ytpanel .k { font-size: 12px; color:#aaa; }
-    .ytpanel input, .ytpanel select { background:#0b0b0b; color:#fff; border:1px solid #2a2a2a; border-radius:8px; padding:8px 10px; outline:none; }
-    .ytpanel input:focus, .ytpanel select:focus { border-color:#3b82f6; }
-    .ytpanel .actions { display:flex; gap:10px; justify-content:flex-end; padding: 10px 14px 14px; border-top: 1px solid #222; }
-    .ytpanel button { border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; border-radius:8px; padding:8px 12px; cursor:pointer; }
-    .ytpanel button.primary { background:#2563eb; border-color:#2563eb; }
-    .ytpanel small.hint { display:block; color:#9aa; margin-top:8px; }
-    .ytpill { display:inline-block; padding:2px 8px; border-radius:999px; background:#1e293b; color:#cbd5e1; font-size:12px; }
+    .ytpanel .k { font-size: 12px; color:#bcb4a3; }
+    .ytpanel input, .ytpanel select { background:#090a09; color:#f4efe3; border:1px solid rgba(228,223,208,0.2); border-radius:6px; padding:8px 10px; outline:none; }
+    .ytpanel input:focus, .ytpanel select:focus { border-color:#8aa1d6; box-shadow: 0 0 0 2px rgba(138,161,214,0.18); }
+    .ytpanel input[type="range"] { width:100%; padding:0; accent-color:#e4dfd0; }
+    .ytpanel input[type="checkbox"] { width:18px; height:18px; accent-color:#e4dfd0; }
+    .ytpanel .actions { display:flex; gap:10px; justify-content:flex-end; padding: 12px 16px 16px; border-top: 1px solid rgba(228,223,208,0.12); }
+    .ytpanel button { border:1px solid rgba(228,223,208,0.22); background:#181b19; color:#f4efe3; border-radius:6px; padding:8px 12px; cursor:pointer; }
+    .ytpanel button.primary { background:#e4dfd0; border-color:#e4dfd0; color:#101110; }
+    .ytpanel button:focus-visible { outline: 2px solid #8aa1d6; outline-offset: 2px; }
+    .ytpanel small.hint { display:block; color:#9f9789; margin-top:8px; }
+    .ytpill { display:inline-block; padding:2px 7px; border-radius:6px; background:#222823; color:#d6cdbd; font-size:12px; }
+    .segmented { display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .preset-volume-row { display:grid; grid-template-columns: 1fr 64px; gap:12px; align-items:start; }
+    .segmented label { position:relative; display:block; }
+    .segmented input { position:absolute; opacity:0; pointer-events:none; }
+    .segmented span { display:block; text-align:center; padding:9px 8px; border:1px solid rgba(228,223,208,0.2); border-radius:6px; background:#111312; cursor:pointer; }
+    .segmented input:checked + span { background:#e4dfd0; color:#101110; border-color:#e4dfd0; }
+    .slider-row { display:grid; grid-template-columns: 78px 1fr; gap: 10px; align-items:center; }
+    .volume-field { display:grid; justify-items:center; align-items:center; gap:5px; color:#bcb4a3; font-size:11px; }
+    .volume-field input[type="range"] { width:28px; height:78px; padding:0; writing-mode: vertical-lr; direction: rtl; }
+    .volume-value { color:#f4efe3; font:650 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .readout { font: 650 20px/1.1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-align:center; background:#090a09; border:1px solid rgba(228,223,208,0.2); border-radius:6px; padding:8px 8px; }
+    .ticks { display:flex; justify-content:space-between; color:#8e877b; font-size: 11px; margin-top: 4px; }
+    .swatches { display:grid; grid-template-columns: repeat(5, minmax(42px, 1fr)); gap: 8px; align-items:start; }
+    .swatch { display:grid; gap:6px; justify-items:center; color:#bcb4a3; font-size: 11px; background:transparent; border:0; padding:0; }
+    .swatch-dot { position:relative; display:block; width:34px; height:34px; border-radius:50%; border:2px solid rgba(244,239,227,0.28); box-shadow: 0 0 0 1px rgba(0,0,0,0.6); overflow:hidden; }
+    .swatch-dot-candle { background: radial-gradient(circle at 50% 58%, rgba(231,138,50,0.34), rgba(25,17,12,0.92) 62%, #090a09 100%); }
+    .swatch-candle-wick { position:absolute; left:50%; bottom:22%; width:3px; height:10px; transform:translateX(-50%); border-radius:999px; background:#1f150f; }
+    .swatch-candle-flame { position:absolute; left:50%; bottom:38%; width:11px; height:17px; transform:translateX(-50%); border-radius:50% 50% 46% 46% / 62% 62% 38% 38%; clip-path:polygon(50% 0%, 66% 24%, 74% 56%, 60% 92%, 50% 100%, 40% 92%, 26% 56%, 34% 24%); background:radial-gradient(ellipse at 50% 68%, rgba(255,201,106,0.76), rgba(231,126,39,0.58) 52%, rgba(177,64,24,0.08) 78%); }
+    .swatch[aria-pressed="true"] .swatch-dot { border-color:#f4efe3; box-shadow: 0 0 0 3px rgba(138,161,214,0.22); }
+    .chorus-row { display:flex; gap:10px; align-items:center; color:#f4efe3; }
+    .effects-row { display:grid; grid-template-columns: repeat(3, minmax(88px, 1fr)); gap: 12px; align-items:end; }
+    .chorus-field { display:grid; justify-items:center; gap:8px; color:#bcb4a3; font-size:12px; }
+    .chorus-toggle { display:grid; place-items:center; min-height:62px; }
+    .section-action-row { display:flex; justify-content:flex-end; }
+    .knobs { display:grid; grid-template-columns: repeat(2, minmax(88px, 1fr)); gap: 12px; }
+    .knob-field { display:grid; justify-items:center; gap:6px; color:#bcb4a3; font-size:12px; }
+    .knob-wrap { position:relative; width:62px; height:62px; display:grid; place-items:center; cursor: ns-resize; touch-action:none; }
+    .knob-wrap::before {
+      content:""; position:absolute; inset:0; border-radius:50%;
+      background:
+        conic-gradient(from -140deg, #e4dfd0 0deg, #e4dfd0 var(--angle, 0deg), #343833 var(--angle, 0deg), #343833 280deg, transparent 280deg),
+        radial-gradient(circle at 50% 50%, #181b19 0 57%, #090a09 58% 100%);
+      border:1px solid rgba(228,223,208,0.24);
+      box-shadow: inset 0 0 0 7px #101210, 0 8px 24px rgba(0,0,0,0.22);
+      pointer-events:none;
+    }
+    .knob-wrap::after {
+      content:""; position:absolute; width:4px; height:20px; top:12px; left:50%; transform: translateX(-50%) rotate(var(--needle, -140deg)); transform-origin: 50% 25px;
+      border-radius:999px; background:#B8322A; pointer-events:none;
+    }
+    .knob-wrap input[type="range"] { position:absolute; inset:0; width:62px; height:62px; opacity:0; pointer-events:none; }
+    .knob-value { min-width:68px; text-align:center; color:#f4efe3; font:650 13px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .advanced-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .compact-pair { display:grid; gap:12px; align-items:start; }
+    @media (max-width: 680px) {
+      .ytpanel .settings-grid { grid-template-columns: 1fr; }
+      .advanced-grid, .effects-row { grid-template-columns: 1fr; }
+    }
   `;
   document.head.appendChild(style);
 
@@ -484,72 +2040,176 @@
   backdrop.innerHTML = `
     <div class="ytpanel" role="dialog" aria-modal="true" aria-label="Kasina timer settings">
       <header>
-        <h3>Quick Help & Settings <span class="ytpill">Press ? to toggle</span></h3>
-        <button id="ytpanel-close" aria-label="Close">✕</button>
+        <div>
+          <h3>Kasina settings</h3>
+          <p class="panel-intro">For time entry: If you want 1 minute 30 seconds, you may enter 90s, 130, or 1.5m etc.</p>
+        </div>
+        <button id="ytpanel-close" aria-label="Close">x</button>
       </header>
       <div class="content">
-        <div style="margin-bottom:10px">
-          <div><b>Keyboard:</b> <code>Space</code> starts/stops timer. <code>g</code> plays current preset. <code>1/2/3</code> audition presets (bronze/bowl/wash). <code>?</code> opens this panel. <code>Esc</code> closes.</div>
-          <small class="hint">Times accept <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code> (e.g. <code>90s</code>, <code>2m</code>).</small>
+        <div class="settings-grid">
+          <div class="settings-stack">
+            <section>
+              <h4>Preset</h4>
+              <div class="preset-volume-row">
+                <div class="segmented" id="f-preset-group">
+                  ${presets.map((preset, index) => `
+                    <label>
+                      <input type="radio" name="f-preset" value="${preset.value}">
+                      <span>${preset.label} (${index + 1})</span>
+                    </label>
+                  `).join('')}
+                </div>
+                <label class="volume-field">
+                  <span>Volume</span>
+                  <input id="f-vol" type="range" min="0" max="1" step="0.01" aria-label="Sound volume">
+                  <span id="f-vol-value" class="volume-value">75%</span>
+                </label>
+              </div>
+              <input id="f-preset" type="hidden">
+            </section>
+
+            <section>
+              <h4>Reverb</h4>
+              <div class="effects-row">
+                <label class="knob-field">
+                  <span>Size</span>
+                  <span class="knob-wrap" id="f-reverb-knob">
+                    <input id="f-reverb" type="range" min="0" max="12000" step="100" aria-label="Reverb size, maximum 12000 ms">
+                  </span>
+                  <span id="f-reverb-value" class="knob-value">500 ms</span>
+                </label>
+                <label class="knob-field">
+                  <span>Mix</span>
+                  <span class="knob-wrap" id="f-mix-knob">
+                    <input id="f-mix" type="range" min="0" max="1" step="0.01" aria-label="Reverb dry wet mix">
+                  </span>
+                  <span id="f-mix-value" class="knob-value">22%</span>
+                </label>
+                <label class="chorus-field">
+                  <span>Chorus</span>
+                  <span class="chorus-toggle">
+                    <input id="f-chorus" type="checkbox" aria-label="Chorus enabled">
+                  </span>
+                  <span class="knob-value">Enabled</span>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h4>Reflection bell</h4>
+              <div class="effects-row">
+                <label class="knob-field">
+                  <span>Pitch</span>
+                  <span class="knob-wrap" id="f-bellPitch-knob">
+                    <input id="f-bellPitch" type="range" min="440" max="1320" step="10" aria-label="Reflection bell pitch in hertz">
+                  </span>
+                  <span id="f-bellPitch-value" class="knob-value">880 Hz</span>
+                </label>
+                <label class="knob-field">
+                  <span>Metal</span>
+                  <span class="knob-wrap" id="f-bellMetal-knob">
+                    <input id="f-bellMetal" type="range" min="0" max="1" step="0.01" aria-label="Reflection bell metallic quality">
+                  </span>
+                  <span id="f-bellMetal-value" class="knob-value">100%</span>
+                </label>
+                <label class="knob-field">
+                  <span>Harmony</span>
+                  <span class="knob-wrap" id="f-bellHarmony-knob">
+                    <input id="f-bellHarmony" type="range" min="0" max="1" step="0.01" aria-label="Reflection bell harmonic FM ratio">
+                  </span>
+                  <span id="f-bellHarmony-value" class="knob-value">0%</span>
+                </label>
+              </div>
+              <div class="section-action-row">
+                <button id="ytpanel-preview-bell" type="button">Preview bell</button>
+              </div>
+            </section>
+
+            <section>
+              <h4>Kasina</h4>
+              <div class="swatches" id="f-color-swatches">
+                ${kasinaChoices.map((choice) => `
+                  <button class="swatch" type="button" data-kasina="${choice.kind}" data-color="${choice.kind === 'disk' ? choice.color : ''}" data-value="${choice.value}" aria-pressed="false" aria-label="${choice.name} kasina">
+                    <span class="swatch-dot${choice.kind === 'candle' ? ' swatch-dot-candle' : ''}"${choice.kind === 'disk' ? ` style="background:${choice.color}"` : ''}>
+                      ${choice.kind === 'candle' ? '<span class="swatch-candle-wick"></span><span class="swatch-candle-flame"></span>' : ''}
+                    </span>
+                    <span>${choice.name}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <input id="f-kasina" type="hidden">
+              <input id="f-color" type="hidden">
+            </section>
+          </div>
+
+          <div class="settings-stack">
+            <section>
+              <h4>Duration</h4>
+              <div class="slider-row">
+                <input id="f-t" inputmode="numeric" autocomplete="off" placeholder="130">
+                <div>
+                  <input id="f-t-slider" type="range" min="0" max="${mainDurationTicks.length - 1}" step="1">
+                  <div class="ticks">${mainDurationTicks.map((m) => `<span>${m}</span>`).join('')}</div>
+                </div>
+              </div>
+              <div id="f-t-display" class="readout" aria-live="polite">10:00</div>
+            </section>
+
+            <section>
+              <h4>Lead in</h4>
+              <div class="slider-row">
+                <input id="f-lead" inputmode="numeric" autocomplete="off" placeholder="35">
+                <div>
+                  <input id="f-lead-slider" type="range" min="0" max="${leadTicks.length - 1}" step="1">
+                  <div class="ticks">${leadTicks.map((s) => `<span>${s}</span>`).join('')}</div>
+                </div>
+              </div>
+              <div id="f-lead-display" class="readout" aria-live="polite">0:03</div>
+            </section>
+
+            <section>
+              <h4>Reflection period</h4>
+              <div class="slider-row">
+                <input id="f-gap" inputmode="numeric" autocomplete="off" placeholder="Off">
+                <div>
+                  <input id="f-gap-slider" type="range" min="0" max="${reflectionTicks.length - 1}" step="1">
+                  <div class="ticks">${reflectionTicks.map((s) => `<span>${s}</span>`).join('')}</div>
+                </div>
+              </div>
+              <div id="f-gap-display" class="readout" aria-live="polite">Off</div>
+            </section>
+
+            <section>
+              <h4>Diameter</h4>
+              <div class="slider-row">
+                <div id="f-d-display" class="readout">35%</div>
+                <div>
+                  <input id="f-d-range" type="range" min="0.2" max="0.6" step="0.01">
+                  <div class="ticks"><span>20</span><span>40</span><span>60</span></div>
+                </div>
+              </div>
+              <input id="f-d" type="hidden">
+            </section>
+
+            <section>
+              <h4>Other</h4>
+              <label>
+                <span class="k">Renderer</span>
+                <select id="f-renderer">
+                  <option value="auto">auto</option>
+                  <option value="css">css</option>
+                  <option value="three">three</option>
+                </select>
+              </label>
+            </section>
+          </div>
         </div>
-
-        <div class="grid">
-          <label>
-            <span class="k">Preset (preset)</span>
-            <select id="f-preset">
-              <option value="default">default</option>
-              <option value="harder-bronze">harder-bronze</option>
-              <option value="temple-bowl">temple-bowl</option>
-              <option value="wash">wash (sound-bath)</option>
-            </select>
-          </label>
-
-          <label>
-            <span class="k">Lead-in (lead)</span>
-            <input id="f-lead" placeholder="10s" />
-          </label>
-          <label>
-            <span class="k">Main duration (t)</span>
-            <input id="f-t" placeholder="10m" />
-          </label>
-          <label>
-            <span class="k">End gap (gap)</span>
-            <input id="f-gap" placeholder="2s" />
-          </label>
-
-          <label>
-            <span class="k">Reverb decay (reverb)</span>
-            <input id="f-reverb" placeholder="3000" />
-          </label>
-          <label>
-            <span class="k">Reverb mix 0–1 (mix)</span>
-            <input id="f-mix" placeholder="0.26" />
-          </label>
-
-          <label>
-            <span class="k">Force chorus 0|1 (chorus)</span>
-            <input id="f-chorus" placeholder="" />
-          </label>
-
-          <label>
-            <span class="k">Kasina color (color)</span>
-            <input id="f-color" placeholder="cobalt / #0047AB" />
-          </label>
-          <label>
-            <span class="k">Background (bg)</span>
-            <input id="f-bg" placeholder="#000000" />
-          </label>
-          <label>
-            <span class="k">Diameter (d)</span>
-            <input id="f-d" placeholder="280px" />
-          </label>
-        </div>
-
-        <small class="hint">Tip: leave any field blank to remove that param and fall back to preset/default.</small>
       </div>
       <div class="actions">
         <button id="ytpanel-permalink">Copy permalink</button>
         <span style="flex:1"></span>
+        <button id="ytpanel-preview">Preview sound (g)</button>
         <button id="ytpanel-cancel">Cancel</button>
         <button id="ytpanel-apply" class="primary">Apply</button>
       </div>
@@ -566,13 +2226,216 @@
     gap: $('#f-gap'),
     reverb: $('#f-reverb'),
     mix: $('#f-mix'),
+    bellPitch: $('#f-bellPitch'),
+    bellMetal: $('#f-bellMetal'),
+    bellHarmony: $('#f-bellHarmony'),
+    vol: $('#f-vol'),
     chorus: $('#f-chorus'),
+    renderer: $('#f-renderer'),
+    kasina: $('#f-kasina'),
     color: $('#f-color'),
-    bg: $('#f-bg'),
     d: $('#f-d'),
   };
-  Object.entries(fields).forEach(([k, el]) => { const v = q(k,''); if (v) el.value = v; });
-  if (!fields.preset.value) fields.preset.value = 'default';
+  const tSlider = $('#f-t-slider');
+  const tDisplay = $('#f-t-display');
+  const leadSlider = $('#f-lead-slider');
+  const leadDisplay = $('#f-lead-display');
+  const gapSlider = $('#f-gap-slider');
+  const gapDisplay = $('#f-gap-display');
+  const dRange = $('#f-d-range');
+  const dDisplay = $('#f-d-display');
+  const volValue = $('#f-vol-value');
+  const reverbKnob = $('#f-reverb-knob');
+  const reverbValue = $('#f-reverb-value');
+  const mixKnob = $('#f-mix-knob');
+  const mixValue = $('#f-mix-value');
+  const bellPitchKnob = $('#f-bellPitch-knob');
+  const bellPitchValue = $('#f-bellPitch-value');
+  const bellMetalKnob = $('#f-bellMetal-knob');
+  const bellMetalValue = $('#f-bellMetal-value');
+  const bellHarmonyKnob = $('#f-bellHarmony-knob');
+  const bellHarmonyValue = $('#f-bellHarmony-value');
+  const presetInputs = [...backdrop.querySelectorAll('input[name="f-preset"]')];
+  const swatchButtons = [...backdrop.querySelectorAll('.swatch')];
+
+  const setPreset = (value) => {
+    const normalized = normalizePresetValue(value || 'harder-bronze');
+    const preset = presets.find((candidate) => candidate.value === normalized) || presets[0];
+    presetInputs.forEach((input) => { input.checked = input.value === preset.value; });
+    fields.preset.value = preset.value;
+    if (!q('chorus')) fields.chorus.checked = preset.chorus;
+  };
+  const setKasinaChoice = (kind, color = fields.color.value || '#1E397A') => {
+    const normalizedKind = resolveKasinaKind(kind || 'disk');
+    fields.kasina.value = normalizedKind;
+    if (normalizedKind === 'disk') fields.color.value = normalizeDiskColor(color);
+    swatchButtons.forEach((button) => {
+      const isPressed = button.dataset.kasina === normalizedKind && (
+        normalizedKind === 'candle' ||
+        normalizeDiskColor(button.dataset.color || '') === fields.color.value
+      );
+      button.setAttribute('aria-pressed', String(isPressed));
+    });
+  };
+  const syncTimerDisplay = () => {
+    const ms = parsePanelTimerMs(fields.t.value, 10 * 60000);
+    tDisplay.textContent = formatClock(ms);
+    tSlider.value = String(nearestIndex(mainDurationTicks, Math.max(1, Math.round(ms / 60000))));
+  };
+  const syncLeadDisplay = () => {
+    const ms = parsePanelTimerMs(fields.lead.value, 3000);
+    leadDisplay.textContent = formatClock(ms);
+    leadSlider.value = String(nearestIndex(leadTicks, Math.round(ms / 1000)));
+  };
+  const formatReflectionValue = (ms) => ms <= 0 ? 'Off' : formatClock(ms);
+  const syncReflectionDisplay = () => {
+    const ms = parsePanelTimerMs(fields.gap.value, 15000);
+    gapDisplay.textContent = formatReflectionValue(ms);
+    gapSlider.value = String(nearestIndex(reflectionTicks.map((value) => value === 'Off' ? 0 : value), Math.round(ms / 1000)));
+  };
+  const syncDiameterDisplay = (ratio) => {
+    const next = clamp(0.2, 0.6, ratio);
+    dRange.value = next.toFixed(2);
+    fields.d.value = next.toFixed(2);
+    dDisplay.textContent = `${Math.round(next * 100)}%`;
+  };
+  const syncVolumeDisplay = () => {
+    const next = clamp(0, 1, Number(fields.vol.value));
+    fields.vol.value = next.toFixed(2);
+    volValue.textContent = `${Math.round(next * 100)}%`;
+  };
+  const syncKnob = (input, knob, valueEl, format) => {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const value = clamp(min, max, Number(input.value));
+    const ratio = max === min ? 0 : (value - min) / (max - min);
+    input.value = String(value);
+    knob.style.setProperty('--angle', `${ratio * 280}deg`);
+    knob.style.setProperty('--needle', `${-140 + (ratio * 280)}deg`);
+    valueEl.textContent = format(value);
+  };
+  const syncReverbKnobs = () => {
+    syncKnob(fields.reverb, reverbKnob, reverbValue, (value) => `${Math.round(value)} ms`);
+    syncKnob(fields.mix, mixKnob, mixValue, (value) => `${Math.round(value * 100)}%`);
+  };
+  const syncBellKnobs = () => {
+    syncKnob(fields.bellPitch, bellPitchKnob, bellPitchValue, (value) => `${Math.round(value)} Hz`);
+    syncKnob(fields.bellMetal, bellMetalKnob, bellMetalValue, (value) => `${Math.round(value * 100)}%`);
+    syncKnob(fields.bellHarmony, bellHarmonyKnob, bellHarmonyValue, (value) => `${Math.round(value * 100)}%`);
+  };
+
+  const decimalPlaces = (value) => {
+    const text = String(value);
+    return text.includes('.') ? text.length - text.indexOf('.') - 1 : 0;
+  };
+  const snapRangeValue = (input, value) => {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const step = input.step === 'any' ? 0 : Number(input.step || 0);
+    const snapped = step > 0 ? min + Math.round((value - min) / step) * step : value;
+    return clamp(min, max, snapped);
+  };
+  const setRangeValue = (input, value) => {
+    const step = input.step === 'any' ? 0 : Number(input.step || 0);
+    const next = snapRangeValue(input, value);
+    input.value = step > 0 ? next.toFixed(decimalPlaces(input.step)) : String(next);
+    input.dispatchEvent(new Event('input', { bubbles:true }));
+  };
+  const bindKnobDrag = (input, knob) => {
+    let drag = null;
+    const dragPixelsForFullRange = 180;
+    knob.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      input.focus();
+      knob.setPointerCapture(event.pointerId);
+      drag = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        value: Number(input.value),
+      };
+    });
+    knob.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const horizontal = event.clientX - drag.x;
+      const vertical = drag.y - event.clientY;
+      const min = Number(input.min);
+      const max = Number(input.max);
+      setRangeValue(input, drag.value + ((horizontal + vertical) / dragPixelsForFullRange) * (max - min));
+    });
+    const endDrag = (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      drag = null;
+    };
+    knob.addEventListener('pointerup', endDrag);
+    knob.addEventListener('pointercancel', endDrag);
+  };
+
+  setPreset(q('preset','harder-bronze'));
+  const initialPresetDefaults = presetDefaults(fields.preset.value);
+  fields.lead.value = q('lead','3');
+  fields.t.value = q('t','1000');
+  fields.gap.value = q('reflection','1') === '0' ? 'Off' : q('gap','15');
+  fields.vol.value = q('vol','0.45');
+  fields.reverb.value = parseReverbKnobValue(q('reverb', initialPresetDefaults.reverb), Number(initialPresetDefaults.reverb));
+  fields.mix.value = parseMixKnobValue(q('mix', initialPresetDefaults.mix), Number(initialPresetDefaults.mix));
+  fields.bellPitch.value = parseClampedKnobValue(q('bellPitch', bellDefaults.pitch), Number(bellDefaults.pitch), 440, 1320);
+  fields.bellMetal.value = parseClampedKnobValue(q('bellMetal', bellDefaults.metal), Number(bellDefaults.metal), 0, 1);
+  fields.bellHarmony.value = parseClampedKnobValue(q('bellHarmony', bellDefaults.harmony), Number(bellDefaults.harmony), 0, 1);
+  fields.renderer.value = q('renderer','auto') || 'auto';
+  fields.color.value = normalizeDiskColor(q('color','#1E397A'));
+  setKasinaChoice(resolveKasinaKind(q('kasina','disk')), fields.color.value);
+  syncTimerDisplay();
+  syncLeadDisplay();
+  syncReflectionDisplay();
+  syncDiameterDisplay(parseDiameterRatio(q('d','0.3')));
+  syncVolumeDisplay();
+  syncReverbKnobs();
+  syncBellKnobs();
+  if (q('chorus')) fields.chorus.checked = q('chorus') === '1';
+
+  presetInputs.forEach((input) => {
+    input.addEventListener('change', () => {
+      const preset = presets.find((candidate) => candidate.value === input.value) || presets[0];
+      const defaults = presetDefaults(preset.value);
+      fields.preset.value = preset.value;
+      fields.chorus.checked = preset.chorus;
+      fields.reverb.value = defaults.reverb;
+      fields.mix.value = defaults.mix;
+      syncReverbKnobs();
+    });
+  });
+  swatchButtons.forEach((button) => {
+    button.addEventListener('click', () => setKasinaChoice(button.dataset.kasina, button.dataset.color));
+  });
+  fields.t.addEventListener('input', syncTimerDisplay);
+  tSlider.addEventListener('input', () => {
+    fields.t.value = `${mainDurationTicks[Number(tSlider.value)]}m`;
+    syncTimerDisplay();
+  });
+  fields.lead.addEventListener('input', syncLeadDisplay);
+  leadSlider.addEventListener('input', () => {
+    fields.lead.value = String(leadTicks[Number(leadSlider.value)]);
+    syncLeadDisplay();
+  });
+  fields.gap.addEventListener('input', syncReflectionDisplay);
+  gapSlider.addEventListener('input', () => {
+    fields.gap.value = String(reflectionTicks[Number(gapSlider.value)]);
+    syncReflectionDisplay();
+  });
+  dRange.addEventListener('input', () => syncDiameterDisplay(Number(dRange.value)));
+  fields.vol.addEventListener('input', syncVolumeDisplay);
+  fields.reverb.addEventListener('input', syncReverbKnobs);
+  fields.mix.addEventListener('input', syncReverbKnobs);
+  fields.bellPitch.addEventListener('input', syncBellKnobs);
+  fields.bellMetal.addEventListener('input', syncBellKnobs);
+  fields.bellHarmony.addEventListener('input', syncBellKnobs);
+  bindKnobDrag(fields.reverb, reverbKnob);
+  bindKnobDrag(fields.mix, mixKnob);
+  bindKnobDrag(fields.bellPitch, bellPitchKnob);
+  bindKnobDrag(fields.bellMetal, bellMetalKnob);
+  bindKnobDrag(fields.bellHarmony, bellHarmonyKnob);
 
   // --- panel show/hide + a11y focus trap ---
   function openPanel() { backdrop.style.display = 'block'; trapFocus(); }
@@ -597,54 +2460,119 @@
     else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
   }
 
+  function isEditableTarget(target) {
+    return target instanceof HTMLElement && (
+      target.isContentEditable ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA'
+    );
+  }
+
   // --- keyboard toggles ---
   window.addEventListener('keydown', (e) => {
-    const isQuestion = e.key === '?' || (e.code === 'Slash' && e.shiftKey);
-    if (isQuestion) { e.preventDefault(); backdrop.style.display === 'block' ? closePanel() : openPanel(); return; }
+    if (isEditableTarget(e.target) && e.key !== 'Escape') return;
+    const isSettingsKey = e.key === 'f' || e.key === 'F';
+    if (isSettingsKey && !e.repeat) { e.preventDefault(); backdrop.style.display === 'block' ? closePanel() : openPanel(); return; }
     if (e.key === 'Escape' && backdrop.style.display === 'block') { e.preventDefault(); closePanel(); }
   });
+  window.addEventListener('happykasina:opensettings', openPanel);
 
   // buttons / click-off
   $('#ytpanel-close').addEventListener('click', closePanel);
   $('#ytpanel-cancel').addEventListener('click', closePanel);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closePanel(); });
 
-  // --- apply: rewrite URL params & reload ---
+  // --- apply: rewrite URL params in place and notify the running app ---
   function setParam(sp, key, value) {
     const trimmed = (value ?? '').trim();
     if (!trimmed) sp.delete(key); else sp.set(key, trimmed);
   }
 
-  $('#ytpanel-apply').addEventListener('click', () => {
+  function collectSettingsSearchParams() {
     const sp = new URLSearchParams(location.search);
     setParam(sp, 'preset', fields.preset.value);
     setParam(sp, 'lead', fields.lead.value);
     setParam(sp, 't', fields.t.value);
     setParam(sp, 'gap', fields.gap.value);
+    sp.delete('reflection');
     setParam(sp, 'reverb', fields.reverb.value);
     setParam(sp, 'mix', fields.mix.value);
-    setParam(sp, 'chorus', fields.chorus.value);
-    setParam(sp, 'color', fields.color.value);
-    setParam(sp, 'bg', fields.bg.value);
+    setParam(sp, 'bellPitch', fields.bellPitch.value);
+    setParam(sp, 'bellMetal', fields.bellMetal.value);
+    setParam(sp, 'bellHarmony', fields.bellHarmony.value);
+    setParam(sp, 'vol', fields.vol.value);
+    setParam(sp, 'chorus', fields.chorus.checked ? '1' : '0');
+    setParam(sp, 'renderer', fields.renderer.value);
+    if (fields.kasina.value === 'candle') {
+      setParam(sp, 'kasina', 'candle');
+    } else {
+      sp.delete('kasina');
+      setParam(sp, 'color', fields.color.value);
+    }
     setParam(sp, 'd', fields.d.value);
-    const next = `${location.pathname}?${sp.toString()}`;
-    location.replace(next);
+    return sp;
+  }
+
+  function collectSoundPreviewSearchParams() {
+    const sp = new URLSearchParams(location.search);
+    setParam(sp, 'preset', fields.preset.value);
+    setParam(sp, 'reverb', fields.reverb.value);
+    setParam(sp, 'mix', fields.mix.value);
+    setParam(sp, 'vol', fields.vol.value);
+    setParam(sp, 'chorus', fields.chorus.checked ? '1' : '0');
+    return sp;
+  }
+
+  function collectBellPreviewSearchParams() {
+    const sp = new URLSearchParams(location.search);
+    setParam(sp, 'reverb', fields.reverb.value);
+    setParam(sp, 'mix', fields.mix.value);
+    setParam(sp, 'bellPitch', fields.bellPitch.value);
+    setParam(sp, 'bellMetal', fields.bellMetal.value);
+    setParam(sp, 'bellHarmony', fields.bellHarmony.value);
+    setParam(sp, 'vol', fields.vol.value);
+    setParam(sp, 'chorus', fields.chorus.checked ? '1' : '0');
+    return sp;
+  }
+
+  function replaceCurrentQuery(sp) {
+    const next = new URL(location.href);
+    next.search = sp.toString();
+    try {
+      history.replaceState(null, '', next);
+    } catch (error) {
+      console.warn('[Kasina Settings] Could not update the address bar.', error);
+    }
+  }
+
+  $('#ytpanel-apply').addEventListener('click', () => {
+    const sp = collectSettingsSearchParams();
+    replaceCurrentQuery(sp);
+    window.dispatchEvent(new CustomEvent('happykasina:settingschange', {
+      detail: { params: Object.fromEntries(sp) }
+    }));
+    closePanel();
+  });
+
+  $('#ytpanel-preview').addEventListener('click', () => {
+    const sp = collectSoundPreviewSearchParams();
+    window.dispatchEvent(new CustomEvent('happykasina:previewgong', {
+      detail: { params: Object.fromEntries(sp) }
+    }));
+  });
+
+  $('#ytpanel-preview-bell').addEventListener('click', () => {
+    const sp = collectBellPreviewSearchParams();
+    window.dispatchEvent(new CustomEvent('happykasina:previewbell', {
+      detail: { params: Object.fromEntries(sp) }
+    }));
   });
 
   // --- permalink copy ---
   $('#ytpanel-permalink').addEventListener('click', async () => {
-    const sp = new URLSearchParams(location.search);
+    const sp = collectSettingsSearchParams();
     const tmp = new URL(location.href);
-    setParam(sp, 'preset', fields.preset.value);
-    setParam(sp, 'lead', fields.lead.value);
-    setParam(sp, 't', fields.t.value);
-    setParam(sp, 'gap', fields.gap.value);
-    setParam(sp, 'reverb', fields.reverb.value);
-    setParam(sp, 'mix', fields.mix.value);
-    setParam(sp, 'chorus', fields.chorus.value);
-    setParam(sp, 'color', fields.color.value);
-    setParam(sp, 'bg', fields.bg.value);
-    setParam(sp, 'd', fields.d.value);
     tmp.search = sp.toString();
     try {
       await navigator.clipboard.writeText(tmp.toString());
@@ -652,6 +2580,103 @@
       btn.textContent = 'Copied!'; setTimeout(() => (btn.textContent = old), 900);
     } catch { prompt('Copy this URL:', tmp.toString()); }
   });
+})();
+</script>
+<script>
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    .practice-panel-backdrop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(0,0,0,0.68); z-index: 9998; }
+    .practice-panel { width: min(88vw, 760px); color: #f7f4ed; background: rgba(10,10,10,0.92); border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; box-shadow: 0 20px 70px rgba(0,0,0,0.55); padding: clamp(28px, 5vw, 52px); font: 500 clamp(22px, 3vw, 34px)/1.35 Georgia, 'Times New Roman', serif; text-align: center; }
+    .practice-panel p { margin: 0; }
+    .practice-panel p + p { margin-top: 0.8em; }
+    .practice-panel kbd { display: inline-grid; place-items:center; min-width: 1.35em; padding: 0.04em 0.32em 0.1em; border: 1px solid rgba(255,255,255,0.32); border-radius: 6px; background: rgba(255,255,255,0.08); color: #fff; font: 650 0.95em/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; vertical-align: 0.03em; }
+    .practice-panel .practice-panel-close { margin-top: 1.5em; border: 1px solid rgba(255,255,255,0.24); border-radius: 8px; background: rgba(255,255,255,0.08); color: #f7f4ed; padding: 0.65em 1em; font: 600 15px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; cursor: pointer; }
+    .practice-panel .practice-panel-close:focus-visible { outline: 2px solid #f7f4ed; outline-offset: 3px; }
+  `;
+  document.head.appendChild(style);
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'practice-panel-backdrop';
+  backdrop.innerHTML = `
+    <div class="practice-panel" role="dialog" aria-modal="true" aria-label="Meditation instructions">
+      <p>Sit comfortably and rest your gaze on the centre of the coloured disk.</p>
+      <p>Let the disk be the whole task; when attention wanders, gently return to its colour and shape.</p>
+      <p>When ready, close your eyes and attend to the retained image or afterimage, returning to the disk when it fades.</p>
+      <p>Press <kbd>Space</kbd> to start immediately, press <kbd>f</kbd> for settings, or press <kbd>j</kbd> for these instructions.</p>
+      <button class="practice-panel-close" type="button">Close</button>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const panel = backdrop.querySelector('.practice-panel');
+  const closeButton = backdrop.querySelector('.practice-panel-close');
+  let lastFocused = null;
+
+  function openPanel() {
+    lastFocused = document.activeElement;
+    backdrop.style.display = 'grid';
+    closeButton.focus();
+  }
+
+  function closePanel() {
+    backdrop.style.display = 'none';
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  }
+
+  function isEditableTarget(target) {
+    return target instanceof HTMLElement && (
+      target.isContentEditable ||
+      target.tagName === 'INPUT' ||
+      target.tagName === 'SELECT' ||
+      target.tagName === 'TEXTAREA'
+    );
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (isEditableTarget(e.target) || backdrop.style.display !== 'grid') return;
+    const isInstructionsKey = e.key === 'j' || e.key === 'J' || e.key === 'h' || e.key === 'H' || e.key === '?' || (e.code === 'Slash' && e.shiftKey);
+    if (e.code === 'Space' || isInstructionsKey) {
+      closePanel();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closePanel();
+    }
+  }, { capture: true });
+
+  window.addEventListener('keydown', (e) => {
+    if (isEditableTarget(e.target)) return;
+    const isInstructionsKey = e.key === 'j' || e.key === 'J' || e.key === 'h' || e.key === 'H' || e.key === '?' || (e.code === 'Slash' && e.shiftKey);
+    if (isInstructionsKey && backdrop.style.display === 'grid') {
+      closePanel();
+      return;
+    }
+    if (isInstructionsKey && !e.repeat) {
+      e.preventDefault();
+      backdrop.style.display === 'grid' ? closePanel() : openPanel();
+      return;
+    }
+    if (e.key === 'Escape' && backdrop.style.display === 'grid') {
+      e.preventDefault();
+      closePanel();
+    }
+  });
+  window.addEventListener('happykasina:openinstructions', openPanel);
+
+  closeButton.addEventListener('click', closePanel);
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      closeButton.focus();
+    }
+  });
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closePanel();
+  });
+  panel.addEventListener('click', (e) => e.stopPropagation());
 })();
 </script>
 </body>
