@@ -1,5 +1,8 @@
 # Happy Kasina
 
+https://github.com/user-attachments/assets/0da7f60b-d6f5-40ec-951a-b2184e043e82
+
+
 A tiny browser-based kasina meditation timer.
 
 The first screen is intentionally quiet: a stable kasina object on a dark field, with gentle gong and bell cues for timing practice. The app is a single static HTML file with no build step, package manager, or server requirement.
