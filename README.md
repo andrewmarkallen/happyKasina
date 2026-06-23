@@ -45,7 +45,7 @@ Common parameters:
 | `lead` | Lead-in before the starting gong | `?lead=15` |
 | `gap` | Delay before the reflection bell after the ending gong | `?gap=30` |
 | `color` | Disk colour alias or hex value | `?color=red` |
-| `kasina` | Visual object: `disk` or `candle` | `?kasina=candle` |
+| `kasina` | Visual object: `disk`, `candle`, or `fire` | `?kasina=fire` |
 | `d` | Kasina diameter as pixels, CSS length, or viewport ratio | `?d=0.32` |
 
 Additional parameters:
@@ -54,7 +54,7 @@ Additional parameters:
 | --- | --- |
 | `bg` | Background colour as a hex value |
 | `renderer` | `auto`, `three`, or `css` |
-| `flicker` | Set to `0` to disable candle flicker |
+| `flicker` | Set to `0` to disable candle flicker and fire motion |
 | `reverb` | Reverb size in milliseconds or duration syntax |
 | `mix` | Reverb dry/wet mix from `0` to `1` |
 | `chorus` | Force chorus off or on with `0` or `1` |

@@ -20,13 +20,60 @@
       position: relative;
       z-index: 1;
     }
-    .kasina[data-kasina="disk"] .candle-scene { display: none; }
+    .kasina[data-kasina="disk"] .candle-scene,
+    .kasina[data-kasina="fire"] .candle-scene { display: none; }
     .kasina[data-kasina="candle"] {
       display: grid;
       place-items: center;
       border-radius: 0;
       background: transparent;
       box-shadow: none;
+    }
+    .kasina[data-kasina="disk"] .fire-scene,
+    .kasina[data-kasina="candle"] .fire-scene { display: none; }
+    .kasina[data-kasina="fire"] {
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 126, 38, 0.92), rgba(156, 22, 12, 0.68) 42%, rgba(18, 5, 18, 0.94) 78%, #050505 100%);
+      box-shadow: 0 0 44px rgba(255, 91, 32, 0.12);
+    }
+    .fire-scene {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(255, 240, 102, 0.88), rgba(255, 96, 30, 0.42) 24%, rgba(115, 12, 24, 0.28) 50%, rgba(6, 5, 7, 0.94) 82%),
+        repeating-linear-gradient(92deg, rgba(255, 206, 77, 0.18) 0 6px, rgba(139, 14, 32, 0.06) 6px 17px, rgba(23, 8, 31, 0.22) 17px 30px);
+      filter: saturate(1.16) contrast(1.06);
+    }
+    .fire-scene::before,
+    .fire-scene::after {
+      content: "";
+      position: absolute;
+      inset: -18% -28%;
+      border-radius: inherit;
+      mix-blend-mode: screen;
+      opacity: 0.66;
+      background:
+        repeating-linear-gradient(101deg, rgba(255, 228, 87, 0.0) 0 11px, rgba(255, 123, 43, 0.34) 11px 19px, rgba(62, 26, 156, 0.18) 19px 34px),
+        radial-gradient(ellipse at 42% 58%, rgba(255, 232, 92, 0.82), rgba(219, 57, 20, 0.20) 30%, rgba(18, 10, 23, 0) 62%);
+      animation: fireKasinaDrift 18s ease-in-out infinite alternate;
+    }
+    .fire-scene::after {
+      inset: -24% -34%;
+      opacity: 0.38;
+      transform: rotate(12deg);
+      animation-duration: 25s;
+      animation-direction: alternate-reverse;
+    }
+    .kasina[data-kasina="fire"][data-flicker="false"] .fire-scene::before,
+    .kasina[data-kasina="fire"][data-flicker="false"] .fire-scene::after {
+      animation: none;
     }
     .candle-scene {
       position: relative;
@@ -120,6 +167,15 @@
       .kasina[data-kasina="candle"][data-flicker="true"] .candle-flame {
         animation: none;
       }
+      .kasina[data-kasina="fire"] .fire-scene::before,
+      .kasina[data-kasina="fire"] .fire-scene::after {
+        animation: none;
+      }
+    }
+    @keyframes fireKasinaDrift {
+      0% { transform: translate3d(-3%, 1%, 0) scale(1.03) rotate(-2deg); }
+      45% { transform: translate3d(2%, -1%, 0) scale(1.08) rotate(3deg); }
+      100% { transform: translate3d(4%, 2%, 0) scale(1.04) rotate(-1deg); }
     }
     .wrap[data-renderer="three"] .kasina { opacity: 0; visibility: hidden; }
     .wrap[data-renderer="fallback"] .scene-root { display: none; }
@@ -236,6 +292,7 @@
         <div class="candle-wick"></div>
         <div class="candle-flame"></div>
       </div>
+      <div class="fire-scene" aria-hidden="true"></div>
     </div>
   </div>
   <div class="practice-hud" id="practice-hud" data-state="idle" aria-label="Practice controls">
@@ -282,11 +339,15 @@
       : (presetColors[color.toLowerCase()] || '#0047AB');
   };
 
-  const resolveKasinaKind = (value) =>
-    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
+  const kasinaKinds = new Set(['disk', 'candle', 'fire']);
+  const resolveKasinaKind = (value) => {
+    const kind = value.trim().toLowerCase();
+    return kasinaKinds.has(kind) ? kind : 'disk';
+  };
 
   const resolveCandleFlicker = (value) =>
     value.trim() !== '0' && !reducedMotion;
+  const resolveVisualMotion = resolveCandleFlicker;
 
   const resolveBackgroundColor = (value) =>
     /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? expandHex(value) : '#000000';
@@ -328,8 +389,8 @@
     const bgColor = resolveBackgroundColor(q('bg'));
     const diameter = cssLength(q('d','280px'), '280px');
     fallbackDisk.dataset.kasina = kasinaKind;
-    fallbackDisk.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
-    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    fallbackDisk.dataset.flicker = String((kasinaKind === 'candle' || kasinaKind === 'fire') && candleFlicker);
+    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : '';
     fallbackDisk.style.width = diameter;
     fallbackDisk.style.height = diameter;
     document.body.style.background = bgColor;
@@ -489,9 +550,9 @@
 
   function createCandleFlameMaterial() {
     return new THREE.ShaderMaterial({
-      transparent: true,
+      transparent: false,
       depthWrite: false,
-      depthTest: true,
+      depthTest: false,
       side: THREE.DoubleSide,
       blending: THREE.NormalBlending,
       uniforms: {
@@ -682,8 +743,158 @@
     return group;
   }
 
+  function createFireLineMaterial({ motion = true } = {}) {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      blending: THREE.NormalBlending,
+      extensions: { derivatives: true },
+      uniforms: {
+        uTime: { value: 0 },
+        uMotion: { value: motion ? 1 : 0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uMotion;
+        varying vec2 vUv;
+
+        float rand(vec2 n) {
+          return fract(sin(cos(dot(n, vec2(12.9898, 12.1414)))) * 83758.5453);
+        }
+
+        float noise(vec2 n) {
+          const vec2 d = vec2(0.0, 1.0);
+          vec2 b = floor(n);
+          vec2 f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
+
+          return mix(
+            mix(rand(b), rand(b + d.yx), f.x),
+            mix(rand(b + d.xy), rand(b + d.yy), f.x),
+            f.y
+          );
+        }
+
+        float fbm(vec2 n) {
+          float total = 0.0;
+          float amplitude = 1.0;
+
+          for (int i = 0; i < 20; i++) {
+            total += noise(n) * amplitude;
+            n += n * 1.7;
+            amplitude *= 0.47;
+          }
+
+          return total;
+        }
+
+        vec3 fireLine(vec2 fragCoord, vec2 res, float time) {
+          const vec3 c1 = vec3(0.5, 0.0, 0.1);
+          const vec3 c2 = vec3(0.9, 0.1, 0.0);
+          const vec3 c3 = vec3(0.2, 0.1, 0.7);
+          const vec3 c4 = vec3(1.0, 0.9, 0.1);
+          const vec3 c5 = vec3(0.1);
+          const vec3 c6 = vec3(0.9);
+
+          vec2 uv = fragCoord.xy / res.xy;
+          vec2 speed = vec2(0.1, 0.9);
+          float shift = 1.327 + sin(time * 2.0) / 2.4;
+          float dist = 3.5 - sin(time * 0.4) / 1.89;
+          vec2 p = fragCoord.xy * dist / res.xx;
+
+          p += sin(p.yx * 4.0 + vec2(0.2, -0.3) * time) * 0.04;
+          p += sin(p.yx * 8.0 + vec2(0.6,  0.1) * time) * 0.01;
+          p.x -= time / 1.1;
+
+          float q  = fbm(p - vec2(time * 0.3)  + vec2(1.0  * sin(time + 0.5) / 2.0));
+          float qb = fbm(p - vec2(time * 0.4)  + vec2(0.1  * cos(time) / 2.0));
+          float q2 = fbm(p - vec2(time * 0.44) - vec2(5.0  * cos(time) / 2.0))  - 6.0;
+          float q3 = fbm(p - vec2(time * 0.9)  - vec2(10.0 * cos(time) / 15.0)) - 4.0;
+          float q4 = fbm(p - vec2(time * 1.4)  - vec2(20.0 * sin(time) / 14.0)) + 2.0;
+
+          q = (q + qb - 0.4 * q2 - 2.0 * q3 + 0.6 * q4) / 3.8;
+
+          vec2 r = vec2(
+            fbm(p + vec2(q / 2.0 + time * speed.x - p.x - p.y)),
+            fbm(p + vec2(q - time * speed.y))
+          );
+
+          vec3 c = mix(c1, c2, fbm(p + r))
+                 + mix(c3, c4, r.x)
+                 - mix(c5, c6, r.y);
+
+          vec3 color = 1.0 / pow(c + 1.61, vec3(4.0))
+                     * cos(shift * fragCoord.y / res.y);
+
+          float flameRise = 0.35;
+          color = vec3(1.0, 0.2, 0.05)
+                / pow((r.y + r.y) * max(0.0, p.y) * flameRise + 0.1, 4.0);
+
+          vec3 emberTexture = vec3(fbm(uv * 4.0 + vec2(time * 0.025, -time * 0.012)));
+          color += (
+            emberTexture
+            * 0.01
+            * pow((r.y + r.y) * 0.65, 5.0)
+            + 0.055
+          ) * mix(
+            vec3(0.9, 0.4, 0.3),
+            vec3(0.7, 0.5, 0.2),
+            uv.y
+          );
+
+          color = color / (1.0 + max(vec3(0.0), color));
+          return color;
+        }
+
+        void main() {
+          float time = uTime * uMotion;
+          vec2 diskPos = (vUv - 0.5) * 2.0;
+          float d = length(diskPos);
+          float aa = max(fwidth(d), 0.001);
+          float diskMask = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, d);
+
+          vec2 localUv = diskPos * 0.5 + 0.5;
+          vec2 localRes = vec2(1024.0, 576.0);
+          vec2 localFragCoord = localUv * localRes;
+          vec3 fire = fireLine(localFragCoord, localRes, time);
+          float edgeVignette = 1.0 - 0.22 * smoothstep(0.72, 1.0, d);
+          fire *= edgeVignette;
+
+          float grain = rand(floor(vUv * 1024.0));
+          vec3 bg = vec3(0.006 + grain * 0.018);
+          gl_FragColor = vec4(mix(bg, fire, diskMask), 1.0);
+        }
+      `,
+    });
+  }
+
+  function createFireKasina({ motion = true } = {}) {
+    const material = createFireLineMaterial({ motion });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 1, 1), material);
+    mesh.position.z = 0.035;
+
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.userData.animatedMaterials = [material];
+    group.userData.fireMotion = motion;
+    return group;
+  }
+
   const createKasinaObject = (kind, hexColor, { flicker = true } = {}) =>
-    kind === 'candle' ? createCandleKasina({ flicker }) : createDisk(hexColor);
+    kind === 'candle'
+      ? createCandleKasina({ flicker })
+      : kind === 'fire'
+        ? createFireKasina({ motion: flicker })
+        : createDisk(hexColor);
 
   function createHazeMaterial(opacity) {
     return new THREE.ShaderMaterial({
@@ -760,13 +971,13 @@
     if (!(wrap && root && fallbackDisk)) throw new Error('Kasina visual mount is missing.');
 
     let kasinaKind = resolveKasinaKind(q('kasina','disk'));
-    let candleFlicker = resolveCandleFlicker(q('flicker','1'));
+    let visualMotion = resolveVisualMotion(q('flicker','1'));
     let kasinaColor = resolveKasinaColor(q('color',''));
     let bgColor = resolveBackgroundColor(q('bg'));
     let diameter = cssLength(q('d','280px'), '280px');
     fallbackDisk.dataset.kasina = kasinaKind;
-    fallbackDisk.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
-    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    fallbackDisk.dataset.flicker = String((kasinaKind === 'candle' || kasinaKind === 'fire') && visualMotion);
+    fallbackDisk.style.background = kasinaKind === 'disk' ? kasinaColor : '';
     fallbackDisk.style.width = diameter;
     fallbackDisk.style.height = diameter;
     document.body.style.background = bgColor;
@@ -791,7 +1002,7 @@
     camera.position.set(0, 0, cameraDistance);
     camera.lookAt(0, 0, 0);
 
-    let visualObject = createKasinaObject(kasinaKind, kasinaColor, { flicker: candleFlicker });
+    let visualObject = createKasinaObject(kasinaKind, kasinaColor, { flicker: visualMotion });
     scene.add(visualObject);
 
     const roomMaterial = new THREE.MeshStandardMaterial({
@@ -806,7 +1017,7 @@
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), roomMaterial.clone());
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0, -1.65, 1.4);
+    floor.position.set(0, -3.05, 1.4);
     floor.receiveShadow = true;
     scene.add(floor);
 
@@ -845,8 +1056,11 @@
       const rect = fallbackDisk.getBoundingClientRect();
       const diameterPx = Math.max(80, Math.min(Math.max(window.innerWidth, window.innerHeight), rect.width || 280));
       const radius = diskRadiusFromPixels(diameterPx, window.innerHeight);
+      visualObject.position.y = Math.min(0.34, Math.max(0.08, radius * 0.12));
       if (kasinaKind === 'candle') {
         visualObject.scale.set(radius, radius, radius);
+      } else if (kasinaKind === 'fire') {
+        visualObject.scale.set(radius, radius, 1);
       } else {
         visualObject.scale.set(radius, radius, Math.max(0.036, radius * 0.074));
       }
@@ -880,14 +1094,14 @@
     const applyVisualSettings = (params) => {
       activeParams = { ...params };
       const nextKasinaKind = resolveKasinaKind(q('kasina','disk'));
-      const nextCandleFlicker = resolveCandleFlicker(q('flicker','1'));
+      const nextVisualMotion = resolveVisualMotion(q('flicker','1'));
       const nextKasinaColor = resolveKasinaColor(q('color',''));
       const nextBgColor = resolveBackgroundColor(q('bg'));
       const nextDiameter = cssLength(q('d','280px'), '280px');
 
       fallbackDisk.dataset.kasina = nextKasinaKind;
-      fallbackDisk.dataset.flicker = String(nextKasinaKind === 'candle' && nextCandleFlicker);
-      fallbackDisk.style.background = nextKasinaKind === 'disk' ? nextKasinaColor : 'transparent';
+      fallbackDisk.dataset.flicker = String((nextKasinaKind === 'candle' || nextKasinaKind === 'fire') && nextVisualMotion);
+      fallbackDisk.style.background = nextKasinaKind === 'disk' ? nextKasinaColor : '';
       fallbackDisk.style.width = nextDiameter;
       fallbackDisk.style.height = nextDiameter;
       document.body.style.background = nextBgColor;
@@ -902,16 +1116,16 @@
       if (
         nextKasinaKind !== kasinaKind ||
         (nextKasinaKind === 'disk' && nextKasinaColor !== kasinaColor) ||
-        (nextKasinaKind === 'candle' && nextCandleFlicker !== candleFlicker)
+        ((nextKasinaKind === 'candle' || nextKasinaKind === 'fire') && nextVisualMotion !== visualMotion)
       ) {
         scene.remove(visualObject);
         disposeObject(visualObject);
-        visualObject = createKasinaObject(nextKasinaKind, nextKasinaColor, { flicker: nextCandleFlicker });
+        visualObject = createKasinaObject(nextKasinaKind, nextKasinaColor, { flicker: nextVisualMotion });
         scene.add(visualObject);
       }
 
       kasinaKind = nextKasinaKind;
-      candleFlicker = nextCandleFlicker;
+      visualMotion = nextVisualMotion;
       kasinaColor = nextKasinaColor;
       bgColor = nextBgColor;
       diameter = nextDiameter;
@@ -927,9 +1141,9 @@
       });
       (visualObject.userData.animatedMaterials || []).forEach((material) => {
         const flicker = candleFlickerValue(elapsed, visualObject.userData.flicker);
-        material.uniforms.uTime.value = elapsed;
-        material.uniforms.uFlicker.value = flicker;
-        material.uniforms.uBrightness.value = 1.0 + flicker * 0.12;
+        if (material.uniforms.uTime) material.uniforms.uTime.value = elapsed;
+        if (material.uniforms.uFlicker) material.uniforms.uFlicker.value = flicker;
+        if (material.uniforms.uBrightness) material.uniforms.uBrightness.value = 1.0 + flicker * 0.12;
       });
       (visualObject.userData.animatedLights || []).forEach((light) => {
         const flicker = candleFlickerValue(elapsed, visualObject.userData.flicker);
@@ -1109,8 +1323,11 @@
     return trimmed;
   };
 
-  const resolveKasinaKind = (value) =>
-    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
+  const kasinaKinds = new Set(['disk', 'candle', 'fire']);
+  const resolveKasinaKind = (value) => {
+    const kind = value.trim().toLowerCase();
+    return kasinaKinds.has(kind) ? kind : 'disk';
+  };
 
   const resolveCandleFlicker = (value) =>
     value.trim() !== '0' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1125,8 +1342,8 @@
     bgColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(q('bg')) ? expandHex(q('bg')) : '#000000';
     diameter = cssLength(q('d','280px'), '280px');
     kasinaEl.dataset.kasina = kasinaKind;
-    kasinaEl.dataset.flicker = String(kasinaKind === 'candle' && candleFlicker);
-    kasinaEl.style.background = kasinaKind === 'disk' ? kasinaColor : 'transparent';
+    kasinaEl.dataset.flicker = String((kasinaKind === 'candle' || kasinaKind === 'fire') && candleFlicker);
+    kasinaEl.style.background = kasinaKind === 'disk' ? kasinaColor : '';
     kasinaEl.style.width = diameter;
     kasinaEl.style.height = diameter;
     document.body.style.background = bgColor;
@@ -1865,6 +2082,7 @@
     { name: 'Yellow', kind: 'disk', value: '#F2C230', color: '#F2C230' },
     { name: 'White', kind: 'disk', value: '#E4DFD0', color: '#E4DFD0' },
     { name: 'Candle', kind: 'candle', value: 'candle', color: '#E78A32' },
+    { name: 'Fire', kind: 'fire', value: 'fire', color: '#FF5F1F' },
   ];
   const diskColorAliases = {
     blue: '#1E397A',
@@ -1952,8 +2170,11 @@
     if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed)) return expandHex(trimmed);
     return diskColorAliases[trimmed.toLowerCase()] || '#1E397A';
   };
-  const resolveKasinaKind = (value) =>
-    value.trim().toLowerCase() === 'candle' ? 'candle' : 'disk';
+  const kasinaKinds = new Set(['disk', 'candle', 'fire']);
+  const resolveKasinaKind = (value) => {
+    const kind = value.trim().toLowerCase();
+    return kasinaKinds.has(kind) ? kind : 'disk';
+  };
 
   // --- styles ---
   const style = document.createElement('style');
@@ -1995,10 +2216,12 @@
     .volume-value { color:#f4efe3; font:650 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
     .readout { font: 650 20px/1.1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; text-align:center; background:#090a09; border:1px solid rgba(228,223,208,0.2); border-radius:6px; padding:8px 8px; }
     .ticks { display:flex; justify-content:space-between; color:#8e877b; font-size: 11px; margin-top: 4px; }
-    .swatches { display:grid; grid-template-columns: repeat(5, minmax(42px, 1fr)); gap: 8px; align-items:start; }
+    .swatches { display:grid; grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 8px; align-items:start; }
     .swatch { display:grid; gap:6px; justify-items:center; color:#bcb4a3; font-size: 11px; background:transparent; border:0; padding:0; }
     .swatch-dot { position:relative; display:block; width:34px; height:34px; border-radius:50%; border:2px solid rgba(244,239,227,0.28); box-shadow: 0 0 0 1px rgba(0,0,0,0.6); overflow:hidden; }
     .swatch-dot-candle { background: radial-gradient(circle at 50% 58%, rgba(231,138,50,0.34), rgba(25,17,12,0.92) 62%, #090a09 100%); }
+    .swatch-dot-fire { background: radial-gradient(circle at 52% 48%, rgba(255,235,88,0.95), rgba(255,88,31,0.82) 32%, rgba(100,14,55,0.64) 62%, #080608 100%); }
+    .swatch-dot-fire::before { content:""; position:absolute; inset:-20% -28%; background: repeating-linear-gradient(100deg, rgba(255,220,74,0.0) 0 6px, rgba(255,122,36,0.42) 6px 10px, rgba(70,24,136,0.22) 10px 18px); transform:rotate(-8deg); }
     .swatch-candle-wick { position:absolute; left:50%; bottom:22%; width:3px; height:10px; transform:translateX(-50%); border-radius:999px; background:#1f150f; }
     .swatch-candle-flame { position:absolute; left:50%; bottom:38%; width:11px; height:17px; transform:translateX(-50%); border-radius:50% 50% 46% 46% / 62% 62% 38% 38%; clip-path:polygon(50% 0%, 66% 24%, 74% 56%, 60% 92%, 50% 100%, 40% 92%, 26% 56%, 34% 24%); background:radial-gradient(ellipse at 50% 68%, rgba(255,201,106,0.76), rgba(231,126,39,0.58) 52%, rgba(177,64,24,0.08) 78%); }
     .swatch[aria-pressed="true"] .swatch-dot { border-color:#f4efe3; box-shadow: 0 0 0 3px rgba(138,161,214,0.22); }
@@ -2006,7 +2229,6 @@
     .effects-row { display:grid; grid-template-columns: repeat(3, minmax(88px, 1fr)); gap: 12px; align-items:end; }
     .chorus-field { display:grid; justify-items:center; gap:8px; color:#bcb4a3; font-size:12px; }
     .chorus-toggle { display:grid; place-items:center; min-height:62px; }
-    .section-action-row { display:flex; justify-content:flex-end; }
     .knobs { display:grid; grid-template-columns: repeat(2, minmax(88px, 1fr)); gap: 12px; }
     .knob-field { display:grid; justify-items:center; gap:6px; color:#bcb4a3; font-size:12px; }
     .knob-wrap { position:relative; width:62px; height:62px; display:grid; place-items:center; cursor: ns-resize; touch-action:none; }
@@ -2121,9 +2343,6 @@
                   <span id="f-bellHarmony-value" class="knob-value">0%</span>
                 </label>
               </div>
-              <div class="section-action-row">
-                <button id="ytpanel-preview-bell" type="button">Preview bell</button>
-              </div>
             </section>
 
             <section>
@@ -2131,7 +2350,7 @@
               <div class="swatches" id="f-color-swatches">
                 ${kasinaChoices.map((choice) => `
                   <button class="swatch" type="button" data-kasina="${choice.kind}" data-color="${choice.kind === 'disk' ? choice.color : ''}" data-value="${choice.value}" aria-pressed="false" aria-label="${choice.name} kasina">
-                    <span class="swatch-dot${choice.kind === 'candle' ? ' swatch-dot-candle' : ''}"${choice.kind === 'disk' ? ` style="background:${choice.color}"` : ''}>
+                    <span class="swatch-dot${choice.kind === 'candle' ? ' swatch-dot-candle' : ''}${choice.kind === 'fire' ? ' swatch-dot-fire' : ''}"${choice.kind === 'disk' ? ` style="background:${choice.color}"` : ''}>
                       ${choice.kind === 'candle' ? '<span class="swatch-candle-wick"></span><span class="swatch-candle-flame"></span>' : ''}
                     </span>
                     <span>${choice.name}</span>
@@ -2209,6 +2428,7 @@
       <div class="actions">
         <button id="ytpanel-permalink">Copy permalink</button>
         <span style="flex:1"></span>
+        <button id="ytpanel-preview-bell" type="button">Preview bell</button>
         <button id="ytpanel-preview">Preview sound (g)</button>
         <button id="ytpanel-cancel">Cancel</button>
         <button id="ytpanel-apply" class="primary">Apply</button>
@@ -2272,6 +2492,7 @@
     swatchButtons.forEach((button) => {
       const isPressed = button.dataset.kasina === normalizedKind && (
         normalizedKind === 'candle' ||
+        normalizedKind === 'fire' ||
         normalizeDiskColor(button.dataset.color || '') === fields.color.value
       );
       button.setAttribute('aria-pressed', String(isPressed));
@@ -2504,11 +2725,11 @@
     setParam(sp, 'vol', fields.vol.value);
     setParam(sp, 'chorus', fields.chorus.checked ? '1' : '0');
     setParam(sp, 'renderer', fields.renderer.value);
-    if (fields.kasina.value === 'candle') {
-      setParam(sp, 'kasina', 'candle');
-    } else {
+    if (fields.kasina.value === 'disk') {
       sp.delete('kasina');
       setParam(sp, 'color', fields.color.value);
+    } else {
+      setParam(sp, 'kasina', fields.kasina.value);
     }
     setParam(sp, 'd', fields.d.value);
     return sp;

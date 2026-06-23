@@ -21,8 +21,18 @@ assertMatch(
 );
 
 assertMatch(
+  /value:\s*'fire'[\s\S]*name:\s*'Fire'|name:\s*'Fire'[\s\S]*value:\s*'fire'/,
+  'settings choices should include a Fire option'
+);
+
+assertMatch(
   /name:\s*'White'[\s\S]*name:\s*'Candle'/,
   'Candle should appear immediately after White in the kasina choices'
+);
+
+assertMatch(
+  /name:\s*'Candle'[\s\S]*name:\s*'Fire'/,
+  'Fire should appear as the sixth kasina choice after Candle'
 );
 
 assertMatch(
@@ -41,8 +51,38 @@ assertMatch(
 );
 
 assertMatch(
+  /createFireKasina/,
+  'Three.js renderer should have a fire visual factory'
+);
+
+assertMatch(
+  /createFireLineMaterial/,
+  'Three.js renderer should expose the fire-line shader material'
+);
+
+assertMatch(
+  /uTime\s*\*\s*uMotion/,
+  'Fire shader should respect disabled visual motion'
+);
+
+assertMatch(
   /data-kasina/,
   'CSS fallback should be keyed by kasina kind'
+);
+
+assertMatch(
+  /fire-scene/,
+  'CSS fallback should include a fire kasina structure'
+);
+
+assertMatch(
+  /@keyframes\s+fireKasinaDrift/,
+  'CSS fallback should define bounded fire drift animation'
+);
+
+assertMatch(
+  /kasinaKind\s*===\s*'fire'[\s\S]*visualObject\.scale\.set\(radius,\s*radius,\s*1\)/,
+  'Three.js fire renderer should scale to the same diameter as the disks'
 );
 
 assertMatch(
