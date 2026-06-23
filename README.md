@@ -1,7 +1,6 @@
 # Happy Kasina
 
-https://github.com/user-attachments/assets/0da7f60b-d6f5-40ec-951a-b2184e043e82
-
+https://github.com/user-attachments/assets/140c2b6e-48a5-4e0a-863f-712aee5fed0a
 
 A tiny browser-based kasina meditation timer.
 
