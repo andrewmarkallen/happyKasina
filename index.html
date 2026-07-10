@@ -1356,11 +1356,46 @@
   // WebAudio core
   // =========================
   let audioCtx = null, convolver = null, revWet = null, revDry = null, wetChainIn = null, wetChainOut = null, audioOutput = null;
+  let audioActivation = null;
 
-  function ensureCtx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+  const publishAudioStatus = (state) => {
+    window.dispatchEvent(new CustomEvent('happykasina:audiostatus', { detail: { state } }));
+  };
+
+  function createAudioContext() {
+    if (audioCtx) return audioCtx;
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) throw new Error('Web Audio is unavailable in this browser.');
+    audioCtx = new AudioContextConstructor();
+    audioCtx.addEventListener('statechange', () => {
+      if (audioCtx.state === 'interrupted') publishAudioStatus('interrupted');
+    });
     return audioCtx;
+  }
+
+  function activateAudio() {
+    try {
+      const ctx = createAudioContext();
+      if (ctx.state === 'running') return Promise.resolve(ctx);
+      if (ctx.state === 'closed') return Promise.reject(new Error('Audio is no longer available.'));
+      if (ctx.state !== 'suspended' && ctx.state !== 'interrupted') {
+        return Promise.reject(new Error(`Audio cannot start from state: ${ctx.state}.`));
+      }
+      if (audioActivation) return audioActivation;
+      audioActivation = ctx.resume()
+        .then(() => {
+          if (ctx.state !== 'running') throw new Error(`Audio did not start (state: ${ctx.state}).`);
+          return ctx;
+        })
+        .catch((error) => {
+          console.warn('[Kasina Audio] Could not activate audio.', error);
+          throw error;
+        })
+        .finally(() => { audioActivation = null; });
+      return audioActivation;
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   function ensureAudioOutput(ctx) {
@@ -1452,8 +1487,7 @@
     return { input, output: out };
   }
 
-  function ensureReverb({ enableChorus=false, chorusCfg={} } = {}) {
-    const ctx = ensureCtx();
+  function ensureReverb(ctx, { enableChorus=false, chorusCfg={} } = {}) {
     const output = ensureAudioOutput(ctx);
     if (!convolver) {
       convolver = buildReverb(ctx, revMs);
@@ -1634,13 +1668,13 @@
   }
 
   // FM gong
-  function playFMGong({
+  function playFMGong(ctx, {
     when=0, level=0.42, base=220, atk=0.04, dec=6.0, shimmer=true,
     ratioA=2.71, ratioB=4.07, ratioS=9.0, indexA=1.2, indexB=0.72, indexS=0.16,
     aDecay=0.87, bDecay=0.78, sDecay=0.25,
     detuneCents=0, wash=null, preview=false
   } = {}) {
-    const { ctx } = ensureReverb(currentWetChain);
+    ensureReverb(ctx, currentWetChain);
     const output = ensureAudioOutput(ctx);
     const t0 = ctx.currentTime + (when||0);
 
@@ -1712,12 +1746,12 @@
     if (preview) registerPreviewVoice(ctx, master, [...toneSources, ...bloomSources], stopAt);
   }
 
-  function playFMBell({
+  function playFMBell(ctx, {
     when=0, level=0.45, pitch=reflectionBellSettings.pitch,
     metal=reflectionBellSettings.metal, harmony=reflectionBellSettings.harmony,
     atk=0.002, dec=1.1, preview=false
   } = {}) {
-    const { ctx } = ensureReverb(currentWetChain);
+    ensureReverb(ctx, currentWetChain);
     const output = ensureAudioOutput(ctx);
     const t0 = ctx.currentTime + (when || 0);
     const dry = ctx.createGain();
@@ -1859,31 +1893,50 @@
 
   window.addEventListener('happykasina:settingschange', (event) => applyRuntimeSettings(event.detail.params));
   window.addEventListener('happykasina:previewgong', (event) => {
-    fadeOutPreviewVoices();
     applyRuntimeSettings({ ...activeParams, ...event.detail.params });
-    triggerPresetGong({}, { preview:true });
+    previewPresetGong();
   });
   window.addEventListener('happykasina:previewbell', (event) => {
-    fadeOutPreviewVoices();
     applyRuntimeSettings({ ...activeParams, ...event.detail.params });
-    playFMBell({ preview:true });
+    previewBell();
   });
 
   // Helper: trigger the gong with current preset
-  function triggerPresetGong(extra = {}, options = {}) {
+  function triggerPresetGong(ctx, extra = {}, options = {}) {
     const fm = { ...currentPreset.fm, ...extra, preview: !!options.preview };
-    playFMGong(fm);
+    playFMGong(ctx, fm);
+  }
+
+  let previewRequest = 0;
+
+  function handleAudioActivationFailure() {
+    publishAudioStatus(audioCtx && audioCtx.state === 'interrupted' ? 'interrupted' : 'unavailable');
   }
 
   function previewPresetGong(extra = {}) {
+    const request = ++previewRequest;
     fadeOutPreviewVoices();
-    triggerPresetGong(extra, { preview:true });
+    activateAudio()
+      .then((ctx) => {
+        if (request === previewRequest) triggerPresetGong(ctx, extra, { preview:true });
+      })
+      .catch(handleAudioActivationFailure);
+  }
+
+  function previewBell() {
+    const request = ++previewRequest;
+    fadeOutPreviewVoices();
+    activateAudio()
+      .then((ctx) => {
+        if (request === previewRequest) playFMBell(ctx, { preview:true });
+      })
+      .catch(handleAudioActivationFailure);
   }
 
   // =========================
   // Timers / controls
   // =========================
-  let running = false, leadTimer=null, mainTimer=null;
+  let running = false, audioStarting = false, sequenceRequest = 0, leadTimer=null, mainTimer=null;
 
   const publishTimerState = (state) => {
     window.dispatchEvent(new CustomEvent('happykasina:timerstate', {
@@ -1898,35 +1951,55 @@
   }
 
   function startSequence() {
-    if (running) return;
-    running = true;
-    ensureReverb(currentWetChain);
-    publishTimerState('lead');
+    if (running || audioStarting) return;
+    const request = ++sequenceRequest;
+    audioStarting = true;
+    activateAudio()
+      .then((ctx) => {
+        if (request !== sequenceRequest) return;
+        audioStarting = false;
+        running = true;
+        ensureReverb(ctx, currentWetChain);
+        publishTimerState('lead');
 
-    // Lead-in → intro hit
-    leadTimer = setTimeout(() => {
-      leadTimer = null;
-      publishTimerState('running');
-      const introExtra = (presetName === 'wash')
-        ? { level:0.32, dec: currentPreset.fm.dec * 0.55, shimmer:false }
-        : { level:0.34,  dec: Math.max(4.0, currentPreset.fm.dec * 0.55), shimmer:false };
-      triggerPresetGong(introExtra);
+        // Lead-in → intro hit
+        leadTimer = setTimeout(() => {
+          leadTimer = null;
+          publishTimerState('running');
+          const introExtra = (presetName === 'wash')
+            ? { level:0.32, dec: currentPreset.fm.dec * 0.55, shimmer:false }
+            : { level:0.34,  dec: Math.max(4.0, currentPreset.fm.dec * 0.55), shimmer:false };
+          triggerPresetGong(ctx, introExtra);
 
-      // After main → two end gongs
-      mainTimer = setTimeout(() => {
-        mainTimer = null;
-        triggerPresetGong({ base: Math.max(40, (currentPreset.fm.base * 0.89)|0), level:0.42 });
-        if (reflectionEnabled) setTimeout(() => playFMBell(), gapMs);
+          // After main → two end gongs
+          mainTimer = setTimeout(() => {
+            mainTimer = null;
+            triggerPresetGong(ctx, { base: Math.max(40, (currentPreset.fm.base * 0.89)|0), level:0.42 });
+            if (reflectionEnabled) setTimeout(() => playFMBell(ctx), gapMs);
+            running = false;
+            publishTimerState('idle');
+          }, mainMs);
+        }, leadMs);
+      })
+      .catch(() => {
+        if (request !== sequenceRequest) return;
+        audioStarting = false;
         running = false;
         publishTimerState('idle');
-      }, mainMs);
-    }, leadMs);
+        handleAudioActivationFailure();
+      });
   }
 
   function cancelSequence() {
+    sequenceRequest += 1;
     clearAll();
+    audioStarting = false;
     running = false;
     publishTimerState('idle');
+  }
+
+  function toggleSequence() {
+    if (running || audioStarting) cancelSequence(); else startSequence();
   }
 
   function isEditableTarget(target) {
@@ -1943,7 +2016,7 @@
     if (isEditableTarget(e.target)) return;
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Space' && !e.repeat) {
-      if (!running) startSequence(); else cancelSequence();
+      toggleSequence();
       return;
     }
     // Live audition
@@ -1956,7 +2029,7 @@
   }, { passive:false });
 
   window.addEventListener('happykasina:togglepractice', () => {
-    if (!running) startSequence(); else cancelSequence();
+    toggleSequence();
   });
 
   logRuntimeSettings();
@@ -1973,6 +2046,7 @@
   const settingsButton = hud.querySelector('.practice-hud-settings');
   const infoButton = hud.querySelector('.practice-hud-info');
   let countdownTimer = null;
+  let audioStatusTimer = null;
 
   const readParams = () => Object.fromEntries(new URLSearchParams(location.search));
   const q = (params, k, d='') => ((params[k] ?? d)).trim();
@@ -2016,6 +2090,11 @@
     countdownTimer = null;
   };
 
+  const clearAudioStatus = () => {
+    if (audioStatusTimer) clearTimeout(audioStatusTimer);
+    audioStatusTimer = null;
+  };
+
   const setHudPhase = (phase, fadeMs = 180) => {
     hud.style.setProperty('--lead-fade-ms', `${Math.max(0, fadeMs)}ms`);
     hud.dataset.state = phase;
@@ -2030,6 +2109,7 @@
   };
 
   const renderLead = ({ leadMs, mainMs }) => {
+    clearAudioStatus();
     clearCountdown();
     const startedAt = performance.now();
     const renderCountdown = () => {
@@ -2045,6 +2125,7 @@
   };
 
   const renderRunning = ({ mainMs }) => {
+    clearAudioStatus();
     clearCountdown();
     leadButton.textContent = 'lead in 0s';
     actionButton.textContent = 'Stop';
@@ -2059,12 +2140,20 @@
     if (detail.state === 'idle') renderIdle();
   };
 
+  const handleAudioStatus = (event) => {
+    if (hud.dataset.state !== 'idle') return;
+    clearAudioStatus();
+    actionButton.textContent = event.detail.state === 'interrupted' ? 'Audio interrupted' : 'Audio unavailable';
+    audioStatusTimer = setTimeout(() => renderIdle(), 3200);
+  };
+
   settingsButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
   infoButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:openinstructions')));
   actionButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:togglepractice')));
   leadButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
   durationButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('happykasina:opensettings')));
   window.addEventListener('happykasina:timerstate', handleTimerState);
+  window.addEventListener('happykasina:audiostatus', handleAudioStatus);
   window.addEventListener('happykasina:settingschange', (event) => renderIdle(event.detail.params));
 
   renderIdle();
